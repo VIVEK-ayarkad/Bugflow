@@ -1,78 +1,216 @@
-# BugFlow
+# 🚀 BugFlow — AI-Powered Defect Intelligence & Bug Tracking Platform
 
-A full-stack bug tracking app with JWT authentication, PostgreSQL persistence, CRUD issue management, and AI-assisted bug reporting.
+<p align="center">
+  <img src="https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/React-18.3+-61DAFB.svg?style=for-the-badge&logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/PostgreSQL-15+-4169E1.svg?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/ReportLab-PDF_Engine-E11D48.svg?style=for-the-badge&logo=adobeacrobatreader&logoColor=white" alt="ReportLab" />
+  <img src="https://img.shields.io/badge/Python-3.12%20|%203.14-3776AB.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+</p>
 
-## Tech Stack
+---
 
-- **Backend:** Python, FastAPI, SQLAlchemy, PostgreSQL, JWT (python-jose)
-- **Frontend:** React, Vite
-- **AI:** OpenAI API (optional — rule-based fallback when no key is set)
+## 📌 Overview
 
-## Database Schema
+**BugFlow** is an enterprise-grade defect tracking and software QA intelligence platform designed for modern engineering teams. It unites a high-throughput **FastAPI** backend, **PostgreSQL** relational persistence, a responsive **React 18** client, **ReportLab** PDF generation, and **Dense Semantic Vector Intelligence** to streamline the complete bug lifecycle.
+
+From automated defect classification and semantic duplicate detection to our signature **Resolution Assistance Copilot**, BugFlow empowers testers to file crystal-clear bug reports and enables developers to diagnose and resolve issues in record time.
+
+---
+
+## ✨ Core Features & Capabilities
+
+### 1. 🔍 Intelligent Defect Classification
+* **Real-time Domain Taxonomy:** Automatically analyzes raw defect descriptions to suggest:
+  * **Defect Category:** *(e.g., Payment, Authentication, UI, Performance, Database)*
+  * **Affected Module:** *(e.g., Checkout / Payment Gateway, Session Manager, Cart)*
+  * **Defect Type:** *(e.g., Functional Defect, Security Vulnerability, Visual Flaw)*
+  * **Suggested Severity & Priority:** *(e.g., High Severity, High Priority)*
+* **1-Click Acceptance:** Testers can accept all AI suggestions instantly with a single button or fine-tune individual fields.
+
+### 2. 📝 Line-by-Line Structured Expansion
+* **Standardized Bug Formatting:** AI Copilot formats descriptions into clean, vertical line-by-line sections:
+  * `Summary:`
+  * `Steps to Reproduce:` (Numbered 1, 2, 3...)
+  * `Expected Result:`
+  * `Actual Result:`
+  * `Impact & Severity Assessment:`
+
+### 3. 🎯 Intelligent Severity & Priority Assistance
+* **Impact Evaluation:** Scores business risk and outage severity *(e.g., "All users unable to complete checkout" → Critical)*.
+* **Compliance & Transparency:** Displays explicit disclaimers ensuring final decision authority remains with authorized project leads.
+
+### 4. ⚠️ Similar Defect Detection & Duplicate Prevention
+* **Real-Time Warning Banner:** Compares newly typed defects against existing project issues using QA-domain word-stemming and token overlap metrics.
+* **Instant Alert:** Prevents redundant tickets by highlighting matching keys *(e.g., `⚠️ Similar Defect Found: DEF-102 (97% Match)`)*.
+
+### 5. 🔮 Semantic Vector Search Engine
+* **Concept-Based Search:** Goes beyond keyword matching to search by conceptual intent.
+* **Example Query:** Searching *"Payment fails after clicking submit"* accurately retrieves *"Transaction crashes during checkout"* with confidence match badges (`✨ 97% Match`).
+* **Hybrid Engine:** Dense domain ontology vector math with optional OpenAI embedding fallback.
+
+### 6. 💡 Resolution Assistance Copilot (Signature Feature)
+* **Instant Developer Guidance:** Opening any defect produces actionable engineering assistance:
+  * **Investigation Areas:** Interactive checklist (API response, null/undefined checks, server logs, error handling).
+  * **Similar Defect History:** Direct links to related historical tickets (`DEF-xxx`).
+  * **Previous Resolution Context:** Summary of how similar historical bugs were resolved.
+  * **Recommended Technical Fix:** Specific code fix with **1-Click Copy** and **"Post to Comments"** actions.
+
+### 7. 🩺 Code Doctor (Pure Direct Syntax & Semantic Repair)
+* **Direct Code Repair:** Submitting faulty code (e.g. `print("hell)`) outputs pure corrected code (`print("hell")`) without wrapping in unnecessary `try...catch` blocks.
+* **AST Validation:** Confirms valid code with `is_correct: true`.
+
+### 8. 📄 1-Click PDF Report Generation
+* **Defect Investigation Reports:** Export complete bug metadata, reproduction steps, resolution assistance, and full comment thread as a PDF.
+* **Project QA Summary Reports:** Executive PDF summarizing project statistics, open defect inventories, and severity charts.
+
+### 9. ✏️ Full Defect Lifecycle & Editing
+* Modify and update defects directly from:
+  * **Bug Detail Modal:** Inline **"✏️ Edit Bug"** toggle.
+  * **Table View:** Dedicated **"✏️ Edit"** button in row actions.
+  * **Kanban Board:** Quick **"✏️"** card action.
+
+### 10. 👤 User Profile & Account Settings
+* Click your user card in the sidebar footer to:
+  * Update **Username** and **Email Address**.
+  * Change **Security Password** (with current password verification).
+  * View assigned role badge and membership duration.
+
+### 11. 📊 Project Sprints & Interactive Kanban Board
+* **5-Stage Kanban Workflow:** `Open` ➔ `In Progress` ➔ `In Review` ➔ `Resolved` ➔ `Closed`.
+* **Sprint Health Analytics:** Automatic sprint risk scoring (`Low`, `Medium`, `High`, `Critical`).
+* **Visual Charts:** Interactive SVG charts for severity distributions, status breakdowns, monthly defect volume, and team workload.
+
+---
+
+## 🏗️ Architecture & Technology Stack
 
 ```
-Users ──< Projects ──< Issues
-  │                      │
-  └──────────────────────┘ (reporter)
+┌─────────────────────────────────────────────────────────────┐
+│                    React 18 Frontend                        │
+│   (Vite • Vanilla CSS • Lucide Icons • Real-Time Modals)    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │  REST API / JWT
+┌──────────────────────────────▼──────────────────────────────┐
+│                    FastAPI Backend Engine                   │
+│   (Python 3.14 • Pydantic v2 • SQLAlchemy 2.0 • ReportLab)  │
+└──────┬───────────────────────┬───────────────────────┬──────┘
+       │                       │                       │
+┌──────▼──────┐         ┌──────▼──────┐         ┌──────▼──────┐
+│ PostgreSQL  │         │ Dense Vector│         │ ReportLab   │
+│  Database   │         │  AI Engine  │         │ PDF Builder │
+└─────────────┘         └─────────────┘         └─────────────┘
 ```
 
-| Table | Key Fields |
-|-------|-----------|
-| **users** | email, username, hashed_password |
-| **projects** | name, description, owner_id → users |
-| **issues** | title, description, status, priority, os, browser, steps_to_reproduce, expected/actual behavior, project_id, reporter_id |
+| Layer | Technologies & Tools |
+| :--- | :--- |
+| **Frontend** | React 18, Vite, Vanilla CSS, Lucide React, Context API |
+| **Backend API** | FastAPI, Pydantic v2, Python 3.12 / 3.14 |
+| **Database** | PostgreSQL, SQLAlchemy 2.0 ORM |
+| **AI Intelligence** | Dense Concept Vector Ontology, OpenAI Embeddings, GPT-4o-mini |
+| **PDF Generation** | ReportLab Document Engine |
+| **Authentication** | Passlib (bcrypt), PyJWT (HS256), Role-Based Access Control (RBAC) |
 
-## Quick Start
+---
 
-### 1. Backend
+## 🚦 Quick Start Guide
+
+### Prerequisites
+* **Python 3.12+**
+* **Node.js 18+** & **npm**
+* **PostgreSQL** (or SQLite for local rapid dev)
+
+---
+
+### 1. Backend Setup
 
 ```bash
+# Navigate to backend directory
 cd backend
-python3.12 -m venv venv    # Python 3.12+ recommended (3.14 may fail on some deps)
-source venv/bin/activate        # Windows: venv\Scripts\activate
+
+# Create and activate Python virtual environment
+python3 -m venv venv
+source venv/bin/activate       # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
-cp .env.example .env            # optional: set SECRET_KEY and OPENAI_API_KEY
-uvicorn app.main:app --reload
+
+# Configure environment variables (optional)
+cp .env.example .env
+
+# Start the FastAPI development server
+uvicorn app.main:app --reload --port 8000
 ```
+> 📚 **Interactive Swagger API Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-API runs at **http://127.0.0.1:8000** — docs at `/docs`.
+---
 
-### 2. Frontend
+### 2. Frontend Setup
 
 ```bash
+# Navigate to frontend directory
 cd frontend
+
+# Install Node dependencies
 npm install
+
+# Start Vite development server
 npm run dev
 ```
+> 🌐 **Web Application UI:** [http://localhost:5173](http://localhost:5173)
 
-UI runs at **http://localhost:5173**.
+---
 
-## API Endpoints
+## ⚙️ Environment Configuration
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/auth/register` | Register user |
-| POST | `/api/auth/login` | Login (returns JWT) |
-| GET | `/api/auth/me` | Current user |
-| GET/POST | `/api/projects` | List / create projects |
-| GET/PUT/DELETE | `/api/projects/{id}` | Project CRUD |
-| GET/POST | `/api/projects/{id}/issues` | List / create issues |
-| GET/PUT/DELETE | `/api/projects/{id}/issues/{id}` | Issue CRUD |
-| POST | `/api/ai/assist` | AI bug report assistant |
+Create a `.env` file inside `backend/`:
 
-## AI-Assisted Bug Reporting
+```env
+# Database Connection
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/bugflow_db
 
-When reporting a bug, type a short description (e.g. "login broken") and click **Enhance with AI**:
+# Security & Tokens
+SECRET_KEY=your-super-secret-jwt-key-change-in-production
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
-- **With OpenAI key:** The LLM analyzes the text, asks follow-up questions for missing details (OS, browser, steps), and auto-formats a professional bug report.
-- **Without API key:** A built-in rule-based fallback detects vague descriptions and prompts for the same details.
+# AI Configuration (Optional — built-in dense vector math works offline)
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
+```
 
-Set `OPENAI_API_KEY` in `backend/.env` to enable full LLM integration.
+---
 
-## Environment Variables
+## 🔑 Key API Endpoints Matrix
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SECRET_KEY` | dev key | JWT signing secret |
-| `OPENAI_API_KEY` | (empty) | OpenAI API key for AI assist |
-| `OPENAI_MODEL` | gpt-4o-mini | Model to use |
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | Register new user account |
+| `POST` | `/api/auth/login` | Login and receive JWT access token |
+| `GET` | `/api/auth/me` | Retrieve authenticated user profile |
+| `PUT` | `/api/auth/profile` | Update profile (username, email, password) |
+| `GET` | `/api/issues` | List defects with filtering & search |
+| `POST` | `/api/projects/{id}/issues` | Create new defect ticket |
+| `PUT` | `/api/issues/{id}` | Update defect details & workflow status |
+| `GET` | `/api/issues/{id}/pdf` | Stream individual defect PDF report |
+| `GET` | `/api/projects/{id}/pdf` | Stream complete project summary PDF |
+| `POST` | `/api/ai/classify-defect` | Suggest Category, Module, Type, Severity |
+| `POST` | `/api/ai/semantic-search` | Conceptual vector similarity search |
+| `GET` | `/api/issues/{id}/resolution-assistance` | Generate checklist, similar bugs & fix |
+| `POST` | `/api/ai/fix-code` | Code Doctor direct syntax & semantic repair |
+
+---
+
+## 🛡️ User Roles & Permissions
+
+BugFlow includes fine-grained **Role-Based Access Control (RBAC)**:
+* 👑 **Admin:** Full access across all projects, system metrics, and user role management.
+* 📋 **Project Manager:** Project configuration, sprint management, and team assignment.
+* 💻 **Developer:** Issue resolution, status transitions, Code Doctor, and resolution assistance.
+* 🧪 **QA Tester:** Defect creation, classification assistance, verification, and PDF report export.
+* 📝 **Reporter:** Submitting bug tickets and tracking issue progress.
+
+---
+
+## 📄 License & Attribution
+
+Distributed under the **MIT License**. Created with ❤️ for software engineering teams.
