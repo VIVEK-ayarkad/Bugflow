@@ -1,8 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bot, Sparkles, AlertTriangle, Lightbulb, BookmarkPlus, Code, CheckCircle, Copy } from 'lucide-react';
 import { aiFixCode, createIssue } from '../api';
 
 const SAMPLES = [
+  {
+    label: 'Python Syntax / Unclosed Quote',
+    lang: 'python',
+    code: `print("hell)`,
+    err: `SyntaxError: unterminated string literal (detected at line 1)`,
+  },
   {
     label: 'JS Undefined .map()',
     lang: 'javascript',
@@ -18,7 +24,7 @@ const SAMPLES = [
   {
     label: 'SQL Unsafe Null Query',
     lang: 'sql',
-    code: `SELECT user_id, email, last_login_date FROM users WHERE active = 1;`,
+    code: `SELECT user_id, email, last_login_date FROM users WHERE active = 1 AND deleted = NULL;`,
     err: `Query returns NULL on missing last_login_date column for new accounts`,
   },
   {
@@ -40,6 +46,12 @@ export default function CodeDoctor({ projects = [], onIssueCreated }) {
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || '');
   const [loggingIssue, setLoggingIssue] = useState(false);
   const [issueCreatedNotice, setIssueCreatedNotice] = useState('');
+
+  useEffect(() => {
+    if (projects.length > 0 && !selectedProjectId) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects, selectedProjectId]);
 
   const handleFixCode = async (e) => {
     if (e) e.preventDefault();
@@ -99,11 +111,11 @@ export default function CodeDoctor({ projects = [], onIssueCreated }) {
   };
 
   return (
-    <div className="card" style={{ background: 'rgba(15, 23, 42, 0.8)', borderColor: 'rgba(99, 102, 241, 0.3)' }}>
+    <div className="card">
       <div className="page-header" style={{ marginBottom: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.5rem', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <Bot size={26} color="#c084fc" />
+          <h1 style={{ fontSize: '1.5rem', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <Bot size={26} color="var(--accent)" />
             AI Code Doctor & Instant Debugger
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.2rem' }}>
@@ -187,45 +199,70 @@ export default function CodeDoctor({ projects = [], onIssueCreated }) {
       {result && (
         <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
           <div className="copilot-diagnosis-box" style={{ marginTop: 0 }}>
+            {/* Header */}
             <div className="copilot-header">
-              <div className="copilot-title" style={{ color: '#34d399', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <CheckCircle size={18} />
-                Bug Diagnosed & Fix Ready
+              <div className="copilot-title" style={{ color: result.is_correct ? 'var(--success)' : 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <CheckCircle size={18} color={result.is_correct ? 'var(--success)' : 'var(--accent)'} />
+                {result.is_correct ? 'Code is Valid & Correct' : 'Bug Diagnosed & Fix Ready'}
               </div>
-              <span className="layer-tag">{language.toUpperCase()}</span>
+              <span className="layer-tag" style={result.is_correct ? { background: 'var(--success-light)', color: 'var(--success)', borderColor: 'var(--success-border)' } : {}}>
+                {language.toUpperCase()} {result.is_correct ? '• VALID' : ''}
+              </span>
             </div>
 
-            {/* User Mistake Banner */}
-            {result.user_mistake && (
+            {/* If Code is Valid / Correct */}
+            {result.is_correct ? (
               <div style={{
-                background: 'rgba(239, 68, 68, 0.14)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'var(--success-light)',
+                border: '1px solid var(--success-border)',
                 borderRadius: 'var(--radius-sm)',
                 padding: '0.85rem 1rem',
                 marginBottom: '0.9rem'
               }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#fca5a5', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <AlertTriangle size={15} /> What You Did Wrong (User Mistake):
+                <div style={{ fontSize: '0.82rem', fontWeight: '800', color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <CheckCircle size={16} /> Syntax & Logic Verification Passed
                 </div>
-                <div style={{ fontSize: '0.9rem', color: '#f8fafc', fontWeight: '600', lineHeight: '1.5' }}>
-                  {result.user_mistake}
+                <div style={{ fontSize: '0.9rem', color: 'var(--text)', fontWeight: '600', lineHeight: '1.5' }}>
+                  {result.explanation || 'Your code is clean, syntactically correct, and contains no detected defects.'}
                 </div>
               </div>
+            ) : (
+              /* User Mistake Banner for Buggy Code */
+              result.user_mistake && (
+                <div className="user-mistake-banner" style={{
+                  background: 'var(--danger-light)',
+                  border: '1px solid var(--danger-border)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '0.85rem 1rem',
+                  marginBottom: '0.9rem'
+                }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <AlertTriangle size={15} /> What You Did Wrong (User Mistake):
+                  </div>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text)', fontWeight: '600', lineHeight: '1.5' }}>
+                    {result.user_mistake}
+                  </div>
+                </div>
+              )
             )}
 
-            <div className="diagnosis-text" style={{ marginBottom: '0.75rem' }}>
-              <strong style={{ color: '#c084fc' }}>Technical Root Cause:</strong> {result.root_cause}
-            </div>
+            {!result.is_correct && (
+              <>
+                <div className="diagnosis-text" style={{ marginBottom: '0.75rem' }}>
+                  <strong style={{ color: 'var(--purple-accent)' }}>Technical Root Cause:</strong> {result.root_cause}
+                </div>
 
-            <div style={{ fontSize: '0.88rem', color: '#cbd5e1', marginBottom: '0.85rem', lineHeight: '1.5' }}>
-              <strong style={{ color: '#818cf8' }}>Fix Explanation:</strong> {result.explanation}
-            </div>
+                <div style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '0.85rem', lineHeight: '1.5' }}>
+                  <strong style={{ color: 'var(--accent)' }}>Fix Explanation:</strong> {result.explanation}
+                </div>
+              </>
+            )}
 
-            {/* Corrected Code Block */}
+            {/* Code Block */}
             <div style={{ marginBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: '700', textTransform: 'uppercase', color: '#34d399' }}>
-                  Corrected Production Code:
+                <span style={{ fontSize: '0.78rem', fontWeight: '700', textTransform: 'uppercase', color: 'var(--success)' }}>
+                  {result.is_correct ? 'Verified Production Code:' : 'Corrected Production Code:'}
                 </span>
                 <button
                   type="button"
@@ -233,22 +270,22 @@ export default function CodeDoctor({ projects = [], onIssueCreated }) {
                   style={{ padding: '0.2rem 0.55rem', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                   onClick={handleCopyCode}
                 >
-                  <Copy size={12} /> Copy Corrected Code
+                  <Copy size={12} /> {result.is_correct ? 'Copy Code' : 'Copy Corrected Code'}
                 </button>
               </div>
-              <pre className="reproduction-snippet" style={{ color: '#34d399', background: 'rgba(3, 7, 18, 0.95)' }}>
+              <pre className="reproduction-snippet" style={{ color: 'var(--success)' }}>
                 {result.corrected_code}
               </pre>
               {copyToast && (
-                <div style={{ fontSize: '0.78rem', color: '#34d399', marginTop: '0.35rem', fontWeight: '600' }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--success)', marginTop: '0.35rem', fontWeight: '600' }}>
                   {copyToast}
                 </div>
               )}
             </div>
 
-            <div style={{ fontSize: '0.82rem', color: '#a5b4fc', background: 'rgba(99,102,241,0.15)', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid rgba(99,102,241,0.3)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Lightbulb size={16} color="#a5b4fc" />
-              <span><strong>Prevention Tip:</strong> {result.prevention_tip}</span>
+            <div style={{ fontSize: '0.82rem', color: 'var(--accent)', background: 'var(--accent-light)', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Lightbulb size={16} color="var(--accent)" />
+              <span><strong>{result.is_correct ? 'Best Practice Tip:' : 'Prevention Tip:'}</strong> {result.prevention_tip}</span>
             </div>
 
             {/* Turn into Bug Issue Helper */}

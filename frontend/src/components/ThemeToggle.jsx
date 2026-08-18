@@ -3,7 +3,7 @@ import { Sun, Moon } from 'lucide-react';
 
 export default function ThemeToggle() {
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('bugflow_theme') || 'dark';
+    return localStorage.getItem('bugflow_theme') || 'light';
   });
 
   useEffect(() => {

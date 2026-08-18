@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.activity import log_activity
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Project, ProjectMember, User, UserRole
+from app.models import ActivityLog, Issue, Project, ProjectMember, User, UserRole
+from app.pdf_service import generate_project_summary_pdf
 from app.schemas import (
     ProjectCreate,
     ProjectMemberCreate,
@@ -26,12 +27,20 @@ def list_projects(
     else:
         # User sees projects they own or are member of
         member_project_ids = [m.project_id for m in current_user.project_memberships]
-        projects = (
-            db.query(Project)
-            .filter((Project.owner_id == current_user.id) | (Project.id.in_(member_project_ids)))
-            .order_by(Project.created_at.desc())
-            .all()
-        )
+        if member_project_ids:
+            projects = (
+                db.query(Project)
+                .filter((Project.owner_id == current_user.id) | (Project.id.in_(member_project_ids)))
+                .order_by(Project.created_at.desc())
+                .all()
+            )
+        else:
+            projects = (
+                db.query(Project)
+                .filter(Project.owner_id == current_user.id)
+                .order_by(Project.created_at.desc())
+                .all()
+            )
     return projects
 
 
@@ -107,6 +116,8 @@ def delete_project(
     if current_user.role != UserRole.ADMIN and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this project")
 
+    # Clean up associated activity logs to maintain referential integrity
+    db.query(ActivityLog).filter(ActivityLog.project_id == project_id).delete()
     log_activity(db, user_id=current_user.id, action="Project Deleted", details=f"Project '{project.name}' deleted")
     db.delete(project)
     db.commit()
@@ -169,3 +180,28 @@ def remove_project_member(
     if member:
         db.delete(member)
         db.commit()
+
+
+@router.get("/{project_id}/pdf")
+def download_project_pdf(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    issues = db.query(Issue).filter(Issue.project_id == project_id).order_by(Issue.created_at.desc()).all()
+    pdf_bytes = generate_project_summary_pdf(project, issues)
+    clean_name = "".join(c for c in project.name if c.isalnum() or c in (' ', '_', '-')).rstrip()
+    filename = f"defect_summary_{clean_name.replace(' ', '_')}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": "application/pdf"
+        }
+    )

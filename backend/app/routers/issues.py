@@ -1,18 +1,22 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.activity import create_notification, log_activity
+from app.ai import generate_resolution_assistance
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Issue, IssuePriority, IssueSeverity, IssueStatus, Project, User, UserRole
+from app.models import Issue, IssuePriority, IssueSeverity, IssueStatus, Project, Sprint, User, UserRole
+from app.pdf_service import generate_issue_pdf
 from app.schemas import (
     IssueAssignUpdate,
     IssueCreate,
     IssueResponse,
     IssueStatusUpdate,
     IssueUpdate,
+    ResolutionAssistanceRequest,
+    ResolutionAssistanceResponse,
 )
 
 router = APIRouter(tags=["issues"])
@@ -93,8 +97,19 @@ def create_issue(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    issue_data = payload.model_dump()
+    if issue_data.get("assigned_developer_id"):
+        dev = db.query(User).filter(User.id == issue_data["assigned_developer_id"]).first()
+        if not dev:
+            issue_data["assigned_developer_id"] = None
+
+    if issue_data.get("sprint_id"):
+        sp = db.query(Sprint).filter(Sprint.id == issue_data["sprint_id"], Sprint.project_id == project_id).first()
+        if not sp:
+            issue_data["sprint_id"] = None
+
     issue = Issue(
-        **payload.model_dump(),
+        **issue_data,
         project_id=project_id,
         reporter_id=current_user.id,
     )
@@ -150,6 +165,14 @@ def update_issue(
     prev_assignee = issue.assigned_developer_id
 
     for field, value in payload.model_dump(exclude_unset=True).items():
+        if field == "assigned_developer_id" and value:
+            dev = db.query(User).filter(User.id == value).first()
+            if not dev:
+                value = None
+        if field == "sprint_id" and value:
+            sp = db.query(Sprint).filter(Sprint.id == value, Sprint.project_id == issue.project_id).first()
+            if not sp:
+                value = None
         setattr(issue, field, value)
     issue.updated_at = datetime.utcnow()
     db.commit()
@@ -284,3 +307,47 @@ def delete_issue(
     )
     db.delete(issue)
     db.commit()
+
+
+@router.get("/api/issues/{issue_id}/pdf")
+def download_issue_pdf(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    pdf_bytes = generate_issue_pdf(issue)
+    filename = f"defect_report_DEF-{issue.id}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": "application/pdf"
+        }
+    )
+
+
+@router.get("/api/issues/{issue_id}/resolution-assistance", response_model=ResolutionAssistanceResponse)
+async def get_issue_resolution_assistance(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    req = ResolutionAssistanceRequest(
+        issue_id=issue.id,
+        title=issue.title,
+        description=issue.description or "",
+        category=issue.category,
+        module=issue.module,
+        project_id=issue.project_id
+    )
+    return await generate_resolution_assistance(req, db)

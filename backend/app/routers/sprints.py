@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.activity import log_activity
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Project, Sprint, SprintStatus, User
+from app.models import Issue, Project, Sprint, SprintStatus, User
 from app.schemas import SprintCreate, SprintResponse, SprintUpdate
 
 router = APIRouter(prefix="/api/sprints", tags=["sprints"])
@@ -24,8 +24,8 @@ def list_sprints(
 
 @router.post("", response_model=SprintResponse, status_code=status.HTTP_201_CREATED)
 def create_sprint(
+    payload: SprintCreate,
     project_id: int = Query(...),
-    payload: SprintCreate = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -143,5 +143,7 @@ def delete_sprint(
     if not sprint:
         raise HTTPException(status_code=404, detail="Sprint not found")
 
+    # Unlink issues assigned to this sprint to prevent foreign key errors
+    db.query(Issue).filter(Issue.sprint_id == sprint_id).update({"sprint_id": None})
     db.delete(sprint)
     db.commit()

@@ -22,18 +22,25 @@ import {
   User,
   Check,
   Plus,
+  Search,
+  X,
+  FileDown,
+  Pencil,
 } from 'lucide-react';
 import {
   addProjectMember,
+  aiSemanticSearch,
   createIssue,
   createProject,
   deleteIssue,
   deleteProject,
+  downloadProjectPdf,
   getAllIssues,
   getDashboardStats,
   getProjectMembers,
   getProjects,
   getUsers,
+  updateIssue,
   updateIssueStatus,
 } from '../api';
 import { useAuth } from '../AuthContext';
@@ -42,6 +49,7 @@ import BugDetailModal from './BugDetailModal';
 import CodeDoctor from './CodeDoctor';
 import IssueForm from './IssueForm';
 import NotificationDrawer from './NotificationDrawer';
+import ProfileModal from './ProfileModal';
 import SprintManager from './SprintManager';
 import ThemeToggle from './ThemeToggle';
 
@@ -71,7 +79,7 @@ function SeverityChart({ data = {} }) {
         <Flame size={16} color="#ef4444" /> Bugs by Severity
       </h4>
       <div className="severity-bar-container" style={{ margin: '1rem 0' }}>
-        <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+        <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', background: 'var(--bg-dark-accent)', border: '1px solid var(--border)' }}>
           {items.map((item, i) => {
             const pct = (item.count / total) * 100;
             if (pct === 0) return null;
@@ -95,20 +103,20 @@ function SeverityChart({ data = {} }) {
 function StatusChart({ data = {} }) {
   const total = Object.values(data).reduce((a, b) => a + b, 0) || 1;
   const items = [
-    { label: 'Open', count: data.open || 0, color: '#6366f1' },
-    { label: 'In Progress', count: data.in_progress || 0, color: '#0ea5e9' },
-    { label: 'In Review', count: data.in_review || 0, color: '#a855f7' },
-    { label: 'Resolved', count: data.resolved || 0, color: '#10b981' },
+    { label: 'Open', count: data.open || 0, color: '#4f46e5' },
+    { label: 'In Progress', count: data.in_progress || 0, color: '#0284c7' },
+    { label: 'In Review', count: data.in_review || 0, color: '#7c3aed' },
+    { label: 'Resolved', count: data.resolved || 0, color: '#059669' },
     { label: 'Closed', count: data.closed || 0, color: '#64748b' },
   ];
 
   return (
     <div className="chart-card">
       <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-        <Zap size={16} color="#6366f1" /> Bugs by Status
+        <Zap size={16} color="var(--accent)" /> Bugs by Status
       </h4>
       <div style={{ margin: '1rem 0' }}>
-        <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+        <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', background: 'var(--bg-dark-accent)', border: '1px solid var(--border)' }}>
           {items.map((item, i) => {
             const pct = (item.count / total) * 100;
             if (pct === 0) return null;
@@ -223,8 +231,8 @@ function MonthlyChart({ data = [] }) {
                   height={Math.max(height, 3)}
                   rx="4"
                   ry="4"
-                  fill={item.count > 0 ? 'url(#skyBlueGrad)' : 'var(--bg-dark-accent)'}
-                  stroke={item.count > 0 ? '#38bdf8' : 'var(--border)'}
+                  fill={item.count > 0 ? 'url(#friendlyIndigoGrad)' : 'var(--bg-dark-accent)'}
+                  stroke={item.count > 0 ? 'var(--accent)' : 'var(--border)'}
                   strokeWidth="1"
                 />
 
@@ -245,8 +253,8 @@ function MonthlyChart({ data = [] }) {
 
           {/* SVG Gradient Defs */}
           <defs>
-            <linearGradient id="skyBlueGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" />
+            <linearGradient id="friendlyIndigoGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#4f46e5" />
               <stop offset="100%" stopColor="#0284c7" />
             </linearGradient>
           </defs>
@@ -262,7 +270,7 @@ function WorkloadChart({ data = [] }) {
   return (
     <div className="chart-card">
       <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-        <Users size={16} color="#0d9488" /> Developer Workload
+        <Users size={16} color="var(--accent)" /> Developer Workload
       </h4>
       <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         {data.length === 0 ? (
@@ -276,8 +284,8 @@ function WorkloadChart({ data = [] }) {
                   <span>{item.developer}</span>
                   <strong>{item.count} bugs</strong>
                 </div>
-                <div style={{ height: '8px', background: 'var(--bg-dark-accent)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.max(widthPct, 4)}%`, height: '100%', background: '#0d9488', borderRadius: '4px' }} />
+                <div style={{ height: '8px', background: 'var(--bg-dark-accent)', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                  <div style={{ width: `${Math.max(widthPct, 4)}%`, height: '100%', background: 'linear-gradient(90deg, #4f46e5, #0284c7)', borderRadius: '4px' }} />
                 </div>
               </div>
             );
@@ -306,10 +314,13 @@ export default function Dashboard() {
   const [severityFilter, setSeverityFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban'
+  const [semanticMode, setSemanticMode] = useState(true);
 
   // Modals
   const [showNewProject, setShowNewProject] = useState(false);
   const [showNewIssue, setShowNewIssue] = useState(false);
+  const [editingIssue, setEditingIssue] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [projectMembers, setProjectMembers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -320,6 +331,33 @@ export default function Dashboard() {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [error, setError] = useState('');
+  const [downloadingProjectPdf, setDownloadingProjectPdf] = useState(false);
+
+  async function handleUpdateIssueSubmit(payload) {
+    if (!editingIssue) return;
+    try {
+      await updateIssue(editingIssue.id, payload);
+      setEditingIssue(null);
+      loadIssuesAndStats();
+    } catch (err) {
+      alert(`Failed to update bug: ${err.message}`);
+    }
+  }
+
+  async function handleDownloadProjectPdf() {
+    if (!selectedProject) {
+      alert('Please select a project first!');
+      return;
+    }
+    setDownloadingProjectPdf(true);
+    try {
+      await downloadProjectPdf(selectedProject.id, selectedProject.name);
+    } catch (err) {
+      alert(`Failed to download project PDF: ${err.message}`);
+    } finally {
+      setDownloadingProjectPdf(false);
+    }
+  }
 
   useEffect(() => {
     loadProjects();
@@ -327,7 +365,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadIssuesAndStats();
-  }, [selectedProject, navTab, statusFilter, severityFilter, priorityFilter, searchQuery]);
+  }, [selectedProject, navTab, statusFilter, severityFilter, priorityFilter, searchQuery, semanticMode]);
 
   async function loadProjects() {
     try {
@@ -344,19 +382,33 @@ export default function Dashboard() {
   async function loadIssuesAndStats() {
     try {
       const pId = selectedProject ? selectedProject.id : null;
-      const [statsData, issuesData] = await Promise.all([
-        getDashboardStats(pId),
-        getAllIssues({
+      const statsData = await getDashboardStats(pId);
+      setStats(statsData);
+
+      if (searchQuery.trim() && semanticMode && !searchQuery.trim().startsWith('#')) {
+        const semRes = await aiSemanticSearch(searchQuery.trim(), pId, 0.30);
+        let semList = semRes.results || [];
+        if (statusFilter !== 'all') {
+          semList = semList.filter((i) => (i.status || '').toLowerCase() === statusFilter.toLowerCase());
+        }
+        if (severityFilter !== 'all') {
+          semList = semList.filter((i) => (i.severity || '').toLowerCase() === severityFilter.toLowerCase());
+        }
+        if (priorityFilter !== 'all') {
+          semList = semList.filter((i) => (i.priority || '').toLowerCase() === priorityFilter.toLowerCase());
+        }
+        setIssues(semList);
+      } else {
+        const issuesData = await getAllIssues({
           project_id: pId,
           search: searchQuery,
           status: statusFilter,
           severity: severityFilter,
           priority: priorityFilter,
           my_bugs_only: navTab === 'my_bugs',
-        }),
-      ]);
-      setStats(statsData);
-      setIssues(issuesData);
+        });
+        setIssues(issuesData);
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -508,16 +560,21 @@ export default function Dashboard() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="user-info">
+          <div className="user-info" onClick={() => setShowProfileModal(true)} style={{ cursor: 'pointer' }} title="Click to view & edit profile">
             <div className="avatar">{user?.username?.[0]?.toUpperCase()}</div>
             <div className="user-details">
               <span className="username">{user?.username}</span>
               <span className="user-role">{user?.role}</span>
             </div>
           </div>
-          <button className="btn-logout" onClick={logout} title="Sign Out">
-            <LogOut size={16} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+            <button className="btn-icon" onClick={() => setShowProfileModal(true)} title="Edit Profile">
+              <User size={15} />
+            </button>
+            <button className="btn-logout" onClick={logout} title="Sign Out">
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -566,13 +623,13 @@ export default function Dashboard() {
                   <span className="stat-label">Resolved / Closed</span>
                 </div>
                 <div className="stat-card">
-                  <span className="stat-number" style={{ color: '#ef4444' }}>
+                  <span className="stat-number" style={{ color: 'var(--danger)' }}>
                     {stats.summary.critical_bugs}
                   </span>
                   <span className="stat-label">Critical Defects</span>
                 </div>
                 <div className="stat-card">
-                  <span className="stat-number" style={{ color: '#38bdf8' }}>
+                  <span className="stat-number" style={{ color: 'var(--accent)' }}>
                     {stats.summary.assigned_bugs}
                   </span>
                   <span className="stat-label">Assigned to Me</span>
@@ -616,6 +673,64 @@ export default function Dashboard() {
           {(navTab === 'issues' || navTab === 'my_bugs') && (
             <div>
               <div className="toolbar">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, maxWidth: '440px' }}>
+                  <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center' }}>
+                    <Search size={15} style={{ position: 'absolute', left: '0.75rem', color: semanticMode ? 'var(--accent)' : 'var(--text-dim)', pointerEvents: 'none' }} />
+                    <input
+                      type="text"
+                      placeholder={semanticMode ? "✨ Semantic Search: e.g. Payment fails after clicking submit..." : "Exact Search by ID (#5), title, or desc..."}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      style={{
+                        paddingLeft: '2.2rem',
+                        paddingRight: searchQuery ? '2rem' : '0.75rem',
+                        height: '36px',
+                        fontSize: '0.85rem',
+                        width: '100%',
+                        borderRadius: 'var(--radius-sm)',
+                        borderColor: semanticMode && searchQuery ? 'var(--accent)' : 'var(--border)'
+                      }}
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        style={{
+                          position: 'absolute',
+                          right: '0.6rem',
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-dim)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: 0,
+                        }}
+                        title="Clear search"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    className={`btn-sm ${semanticMode ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setSemanticMode(!semanticMode)}
+                    title="Toggle AI Semantic Search vs Keyword Search"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      whiteSpace: 'nowrap',
+                      fontSize: '0.78rem',
+                      padding: '0.45rem 0.65rem'
+                    }}
+                  >
+                    <Sparkles size={13} /> {semanticMode ? 'Semantic' : 'Keyword'}
+                  </button>
+                </div>
+
                 <div className="filter-group">
                   <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                     <option value="all">All Statuses</option>
@@ -644,6 +759,16 @@ export default function Dashboard() {
                 </div>
 
                 <div className="view-mode-toggle">
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleDownloadProjectPdf}
+                    disabled={downloadingProjectPdf || !selectedProject}
+                    title="Download Project Defect Summary as PDF"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <FileDown size={14} />
+                    {downloadingProjectPdf ? 'Generating PDF...' : 'Download Project PDF'}
+                  </button>
                   <button
                     className={`btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
                     onClick={() => setViewMode('list')}
@@ -701,7 +826,24 @@ export default function Dashboard() {
                             </td>
                             <td>
                               <div className="table-issue-title">
-                                <strong>{issue.title}</strong>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <strong>{issue.title}</strong>
+                                  {issue.similarity_score && (
+                                    <span className="badge" style={{ fontSize: '0.68rem', padding: '0.1rem 0.45rem', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', borderColor: '#a855f7' }}>
+                                      ✨ {issue.similarity_score}% Match
+                                    </span>
+                                  )}
+                                  {issue.category && (
+                                    <span className="badge" style={{ fontSize: '0.68rem', padding: '0.1rem 0.45rem', background: 'var(--accent-light)', color: 'var(--accent)', borderColor: 'var(--border)' }}>
+                                      {issue.category}
+                                    </span>
+                                  )}
+                                  {issue.module && (
+                                    <span className="badge" style={{ fontSize: '0.68rem', padding: '0.1rem 0.45rem', background: 'var(--bg-dark-accent)', color: 'var(--text-muted)' }}>
+                                      {issue.module}
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="table-issue-snippet">{issue.description}</span>
                               </div>
                             </td>
@@ -724,37 +866,23 @@ export default function Dashboard() {
                                 <option value="closed">Closed</option>
                               </select>
                             </td>
-                            <td>
-                              <div className="user-chip">
-                                <div className="user-chip-avatar">
-                                  {(issue.assigned_developer?.username || 'U')[0].toUpperCase()}
-                                </div>
-                                <span>{issue.assigned_developer?.username || 'Unassigned'}</span>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="user-chip">
-                                <div className="user-chip-avatar" style={{ background: 'linear-gradient(135deg, #a855f7, #ec4899)' }}>
-                                  {(issue.reporter?.username || 'S')[0].toUpperCase()}
-                                </div>
-                                <span>{issue.reporter?.username || 'System'}</span>
-                              </div>
-                            </td>
-                            <td style={{ whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            <td>{issue.assigned_developer?.username || <span style={{ color: 'var(--text-dim)' }}>Unassigned</span>}</td>
+                            <td>{issue.reporter?.username || 'System'}</td>
+                            <td style={{ whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
                               {new Date(issue.created_at).toLocaleDateString()}
                             </td>
-                            <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
-                              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <div style={{ display: 'flex', gap: '0.35rem' }}>
                                 <button
-                                  className="btn-link-sm"
-                                  onClick={() => setSelectedIssue(issue)}
-                                  title="View Details"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => setEditingIssue(issue)}
+                                  title="Edit Bug"
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
                                 >
-                                  <Eye size={13} /> View
+                                  <Pencil size={13} /> Edit
                                 </button>
                                 <button
-                                  className="btn-link-sm danger"
+                                  className="btn btn-secondary btn-sm danger"
                                   onClick={() => handleDeleteIssue(issue.id)}
                                   title="Delete Bug"
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
@@ -785,8 +913,20 @@ export default function Dashboard() {
                         <div className="kanban-cards">
                           {colIssues.map((issue) => (
                             <div key={issue.id} className="kanban-card" onClick={() => setSelectedIssue(issue)}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                <span className="bug-id-tag">#{issue.id}</span>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                  <span className="bug-id-tag">#{issue.id}</span>
+                                  {issue.similarity_score && (
+                                    <span className="badge" style={{ fontSize: '0.65rem', padding: '0.05rem 0.35rem', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', borderColor: '#a855f7' }}>
+                                      ✨ {issue.similarity_score}%
+                                    </span>
+                                  )}
+                                  {issue.category && (
+                                    <span className="badge" style={{ fontSize: '0.65rem', padding: '0.05rem 0.35rem', background: 'var(--accent-light)', color: 'var(--accent)' }}>
+                                      {issue.category}
+                                    </span>
+                                  )}
+                                </div>
                                 <Badge value={issue.severity} />
                               </div>
                               <h4>{issue.title}</h4>
@@ -807,6 +947,16 @@ export default function Dashboard() {
                                       <Check size={12} />
                                     </button>
                                   )}
+                                  <button
+                                    className="btn-icon-xs"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingIssue(issue);
+                                    }}
+                                    title="Edit Bug"
+                                  >
+                                    <Pencil size={12} />
+                                  </button>
                                   <button
                                     className="btn-icon-xs danger"
                                     onClick={(e) => {
@@ -874,7 +1024,7 @@ export default function Dashboard() {
           )}
 
           {/* TAB 5: AI CODE DOCTOR */}
-          {navTab === 'ai_tools' && <CodeDoctor />}
+          {navTab === 'ai_tools' && <CodeDoctor projects={projects} onIssueCreated={loadIssuesAndStats} />}
 
           {/* TAB 6: ADMIN PANEL */}
           {navTab === 'admin' && isAdmin && <AdminPanel />}
@@ -891,6 +1041,28 @@ export default function Dashboard() {
               onSubmit={handleCreateIssueSubmit}
               onCancel={() => setShowNewIssue(false)}
               submitLabel="Submit Bug Report"
+            />
+          </div>
+        </div>
+      )}
+
+      {editingIssue && (
+        <div className="modal-overlay" onClick={() => setEditingIssue(null)}>
+          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Pencil size={20} color="var(--accent)" /> Edit Defect #{editingIssue.id}: {editingIssue.title}
+              </h2>
+              <button className="btn-icon" onClick={() => setEditingIssue(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <IssueForm
+              initial={editingIssue}
+              projectId={editingIssue.project_id || selectedProject?.id}
+              onSubmit={handleUpdateIssueSubmit}
+              onCancel={() => setEditingIssue(null)}
+              submitLabel="Save Changes"
             />
           </div>
         </div>
@@ -979,6 +1151,10 @@ export default function Dashboard() {
           onClose={() => setSelectedIssue(null)}
           onRefresh={loadIssuesAndStats}
         />
+      )}
+
+      {showProfileModal && (
+        <ProfileModal onClose={() => setShowProfileModal(false)} />
       )}
 
       <NotificationDrawer isOpen={notifOpen} onClose={() => setNotifOpen(false)} />

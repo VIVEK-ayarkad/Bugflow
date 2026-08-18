@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Zap, Play, CheckCircle2, Sparkles, Plus } from 'lucide-react';
-import { aiSprintHealth, completeSprint, createSprint, getSprints, startSprint } from '../api';
+import { Zap, Play, CheckCircle2, Sparkles, Plus, Trash2 } from 'lucide-react';
+import { aiSprintHealth, completeSprint, createSprint, deleteSprint, getSprints, startSprint } from '../api';
 
 export default function SprintManager({ projectId, onRefresh }) {
   const [sprints, setSprints] = useState([]);
@@ -61,6 +61,17 @@ export default function SprintManager({ projectId, onRefresh }) {
     }
   }
 
+  async function handleDeleteSprint(sprintId, sprintName) {
+    if (!window.confirm(`Are you sure you want to delete '${sprintName}'? Unresolved issues will remain in the backlog.`)) return;
+    try {
+      await deleteSprint(sprintId);
+      loadSprints();
+      onRefresh();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   async function handleAnalyzeHealth(sprintId) {
     try {
       const res = await aiSprintHealth(sprintId);
@@ -100,7 +111,7 @@ export default function SprintManager({ projectId, onRefresh }) {
                   <span className={`badge badge-${sprint.status}`}>{sprint.status}</span>
                 </div>
 
-                <div className="sprint-actions" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+                <div className="sprint-actions" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   {sprint.status === 'planning' && (
                     <button className="btn btn-primary btn-sm" onClick={() => handleStartSprint(sprint.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                       <Play size={14} /> Start Sprint
@@ -114,13 +125,21 @@ export default function SprintManager({ projectId, onRefresh }) {
                   <button className="btn btn-ai btn-sm" onClick={() => handleAnalyzeHealth(sprint.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                     <Sparkles size={14} /> AI Sprint Health
                   </button>
+                  <button
+                    className="btn btn-secondary btn-sm danger"
+                    onClick={() => handleDeleteSprint(sprint.id, sprint.name)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                    title="Delete Sprint"
+                  >
+                    <Trash2 size={14} /> Delete
+                  </button>
                 </div>
 
                 {health && (
-                  <div className="sprint-health-widget" style={{ marginTop: '0.75rem', background: 'rgba(15, 23, 42, 0.4)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div className="sprint-health-widget" style={{ marginTop: '0.75rem', background: 'var(--bg-dark-accent)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                       <span>Sprint Health Score: {health.health_score}/100</span>
-                      <span style={{ color: health.risk_level === 'Low' ? '#34d399' : '#f87171' }}>
+                      <span style={{ color: health.risk_level === 'Low' ? 'var(--success)' : 'var(--danger)' }}>
                         Risk: {health.risk_level}
                       </span>
                     </div>

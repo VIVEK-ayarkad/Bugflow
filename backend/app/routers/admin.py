@@ -3,7 +3,17 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_roles
 from app.database import get_db
-from app.models import Issue, Project, User, UserRole
+from app.models import (
+    ActivityLog,
+    Attachment,
+    Comment,
+    Issue,
+    Notification,
+    Project,
+    ProjectMember,
+    User,
+    UserRole,
+)
 from app.schemas import UserResponse, UserRoleUpdate
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -44,6 +54,17 @@ def delete_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Clean up dependent relational references safely
+    db.query(Issue).filter(Issue.assigned_developer_id == user_id).update({"assigned_developer_id": None})
+    db.query(Issue).filter(Issue.reporter_id == user_id).update({"reporter_id": admin.id})
+    db.query(Project).filter(Project.owner_id == user_id).update({"owner_id": admin.id})
+    db.query(ProjectMember).filter(ProjectMember.user_id == user_id).delete()
+    db.query(Comment).filter(Comment.user_id == user_id).delete()
+    db.query(Attachment).filter(Attachment.user_id == user_id).delete()
+    db.query(ActivityLog).filter(ActivityLog.user_id == user_id).delete()
+    db.query(Notification).filter(Notification.user_id == user_id).delete()
+
     db.delete(user)
     db.commit()
 

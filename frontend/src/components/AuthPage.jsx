@@ -46,31 +46,31 @@ export default function AuthPage() {
             <h2 style={{ fontSize: '2rem', lineHeight: '1.2', fontWeight: '800', marginBottom: '0.75rem' }}>
               Centralized Defect & Sprint Intelligence
             </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+            <p style={{ color: '#e0e7ff', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
               Modern bug tracking platform built with automated code diagnostics, predictive severity scoring, and real-time workload telemetry.
             </p>
 
             <ul className="feature-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <li className="feature-item" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <div className="feature-icon" style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '0.35rem', borderRadius: '6px', color: '#818cf8' }}>
+                <div className="feature-icon">
                   <ShieldCheck size={16} />
                 </div>
                 <span>Role-Based Access Control (RBAC System)</span>
               </li>
               <li className="feature-item" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <div className="feature-icon" style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '0.35rem', borderRadius: '6px', color: '#818cf8' }}>
+                <div className="feature-icon">
                   <Activity size={16} />
                 </div>
                 <span>Real-Time Workload & Defect Telemetry</span>
               </li>
               <li className="feature-item" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <div className="feature-icon" style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '0.35rem', borderRadius: '6px', color: '#818cf8' }}>
+                <div className="feature-icon">
                   <Cpu size={16} />
                 </div>
                 <span>Sprint Board, File Attachments & Audit Trail</span>
               </li>
               <li className="feature-item" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <div className="feature-icon" style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '0.35rem', borderRadius: '6px', color: '#818cf8' }}>
+                <div className="feature-icon">
                   <Sparkles size={16} />
                 </div>
                 <span>AI Productivity Suite: Code Doctor, Severity Predictor & Duplicate Scanner</span>
@@ -78,15 +78,15 @@ export default function AuthPage() {
             </ul>
           </div>
 
-          <div style={{ marginTop: '2.5rem', fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <Lock size={14} color="#64748b" />
+          <div style={{ marginTop: '2.5rem', fontSize: '0.8rem', color: '#c7d2fe', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Lock size={14} color="#c7d2fe" />
             <span>JWT Encrypted & Secure Defect Management</span>
           </div>
         </section>
 
-        <div className="auth-card card">
+        <div className="auth-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.66rem', marginBottom: '0.2rem' }}>
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'linear-gradient(135deg, #4f46e5, #0284c7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
               <Bot size={22} />
             </div>
             <div>

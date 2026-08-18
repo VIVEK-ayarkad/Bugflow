@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.database import get_db
 from app.models import User, UserRole
-from app.schemas import Token, UserCreate, UserLogin, UserResponse
+from app.schemas import Token, UserCreate, UserLogin, UserProfileUpdate, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -51,4 +51,36 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.put("/profile", response_model=UserResponse)
+def update_profile(
+    payload: UserProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if payload.username and payload.username.strip() != current_user.username:
+        new_username = payload.username.strip()
+        existing = db.query(User).filter(User.username == new_username, User.id != current_user.id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Username is already taken")
+        current_user.username = new_username
+
+    if payload.email and payload.email.strip().lower() != current_user.email.lower():
+        new_email = payload.email.strip().lower()
+        existing = db.query(User).filter(User.email == new_email, User.id != current_user.id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email is already in use")
+        current_user.email = new_email
+
+    if payload.new_password:
+        if not payload.current_password:
+            raise HTTPException(status_code=400, detail="Current password is required to set a new password")
+        if not verify_password(payload.current_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        current_user.hashed_password = hash_password(payload.new_password)
+
+    db.commit()
+    db.refresh(current_user)
     return current_user

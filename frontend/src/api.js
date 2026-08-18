@@ -49,6 +49,13 @@ export async function getMe() {
   return request('/auth/me');
 }
 
+export async function updateUserProfile(payload) {
+  return request('/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 export async function getUsers() {
@@ -206,9 +213,10 @@ export async function getSprints(projectId = null) {
 }
 
 export async function createSprint(projectId, payload) {
-  const params = new URLSearchParams({ project_id: projectId, name: payload.name });
-  if (payload.goal) params.append('goal', payload.goal);
-  return request(`/sprints?${params.toString()}`, { method: 'POST' });
+  return request(`/sprints?project_id=${projectId}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function startSprint(sprintId) {
@@ -256,6 +264,13 @@ export async function getAdminReports() {
 
 // ── AI Features ───────────────────────────────────────────────────────────────
 
+export async function aiClassifyDefect(description, title = '') {
+  return request('/ai/classify-defect', {
+    method: 'POST',
+    body: JSON.stringify({ description, title }),
+  });
+}
+
 export async function aiAssist(rawDescription) {
   return request('/ai/assist', {
     method: 'POST',
@@ -277,6 +292,18 @@ export async function aiDetectDuplicates(projectId, title, description) {
   });
 }
 
+export async function aiSemanticSearch(query, projectId = null, threshold = 0.35, limit = 20) {
+  return request('/ai/semantic-search', {
+    method: 'POST',
+    body: JSON.stringify({
+      query,
+      project_id: projectId,
+      threshold,
+      limit,
+    }),
+  });
+}
+
 export async function aiFixCode(payload) {
   return request('/ai/fix-code', {
     method: 'POST',
@@ -286,6 +313,56 @@ export async function aiFixCode(payload) {
 
 export async function aiSprintHealth(sprintId) {
   return request(`/ai/sprint-health/${sprintId}`, { method: 'POST' });
+}
+
+export async function getResolutionAssistance(issueId, payload = null) {
+  if (issueId) {
+    return request(`/issues/${issueId}/resolution-assistance`);
+  }
+  return request('/ai/resolution-assistance', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// ── PDF Export Downloads ──────────────────────────────────────────────────────
+
+export async function downloadIssuePdf(issueId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/issues/${issueId}/pdf`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to generate defect PDF report');
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `defect_report_DEF-${issueId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function downloadProjectPdf(projectId, projectName = 'project') {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/projects/${projectId}/pdf`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to generate project PDF summary');
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `defect_summary_${projectName.replace(/\s+/g, '_')}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export { getToken };

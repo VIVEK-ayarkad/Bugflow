@@ -1,19 +1,40 @@
 import { useEffect, useState } from 'react';
-import { Trash2, X, Paperclip, FileText, Download } from 'lucide-react';
+import {
+  Trash2,
+  X,
+  Paperclip,
+  FileText,
+  Download,
+  FileDown,
+  Sparkles,
+  Lightbulb,
+  CheckSquare,
+  Square,
+  Copy,
+  Check,
+  ArrowRight,
+  ExternalLink,
+  ShieldAlert,
+  Pencil,
+} from 'lucide-react';
 import {
   addComment,
   assignIssue,
   deleteAttachment,
   deleteComment,
   deleteIssue,
+  downloadIssuePdf,
   editComment,
   getAttachments,
   getComments,
+  getResolutionAssistance,
   getUsers,
+  updateIssue,
   updateIssueStatus,
   uploadAttachment,
 } from '../api';
 import { useAuth } from '../AuthContext';
+import IssueForm from './IssueForm';
 
 const WORKFLOW_STEPS = [
   { id: 'open', label: 'Open' },
@@ -36,6 +57,12 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [resolutionAssistance, setResolutionAssistance] = useState(null);
+  const [loadingAssistance, setLoadingAssistance] = useState(false);
+  const [checkedAreas, setCheckedAreas] = useState({});
+  const [copiedFix, setCopiedFix] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     setCurrentIssue(issue);
@@ -43,8 +70,34 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
       loadComments(issue.id);
       loadAttachments(issue.id);
       loadDevelopers();
+      loadResolutionAssistance(issue.id);
+      setIsEditing(false);
     }
   }, [issue]);
+
+  async function loadResolutionAssistance(issueId) {
+    setLoadingAssistance(true);
+    try {
+      const data = await getResolutionAssistance(issueId);
+      setResolutionAssistance(data);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingAssistance(false);
+    }
+  }
+
+  async function handleEditSubmit(payload) {
+    try {
+      const updated = await updateIssue(currentIssue.id, payload);
+      setCurrentIssue(updated);
+      setIsEditing(false);
+      onRefresh();
+      loadResolutionAssistance(updated.id);
+    } catch (err) {
+      alert(`Failed to update bug: ${err.message}`);
+    }
+  }
 
   async function loadDevelopers() {
     try {
@@ -171,6 +224,42 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
     }
   }
 
+  async function handleDownloadPdf() {
+    if (!currentIssue) return;
+    setDownloadingPdf(true);
+    try {
+      await downloadIssuePdf(currentIssue.id);
+    } catch (err) {
+      alert(`Failed to download PDF: ${err.message}`);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
+  function toggleCheckArea(idx) {
+    setCheckedAreas((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  }
+
+  function handleCopyFix() {
+    if (!resolutionAssistance?.possible_resolution) return;
+    navigator.clipboard.writeText(resolutionAssistance.possible_resolution);
+    setCopiedFix(true);
+    setTimeout(() => setCopiedFix(false), 2500);
+  }
+
+  async function handleApplyResolutionComment() {
+    if (!resolutionAssistance?.possible_resolution) return;
+    const text = `💡 **Applied Resolution:**\n${resolutionAssistance.possible_resolution}`;
+    try {
+      const c = await addComment(currentIssue.id, text);
+      setComments((prev) => [...prev, c]);
+      setActiveTab('comments');
+      alert('Resolution note posted to discussion comments!');
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   if (!currentIssue) return null;
 
   const currentStepIdx = WORKFLOW_STEPS.findIndex((s) => s.id === currentIssue.status);
@@ -179,7 +268,7 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
               <span className="bug-id-tag">#BUG-{currentIssue.id}</span>
@@ -191,7 +280,26 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
             <h2 style={{ margin: '0.2rem 0', fontSize: '1.3rem' }}>{currentIssue.title}</h2>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setIsEditing(!isEditing)}
+              title={isEditing ? "Cancel Editing" : "Edit Defect Details"}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', borderColor: isEditing ? 'var(--accent)' : 'var(--border)' }}
+            >
+              <Pencil size={14} />
+              {isEditing ? 'Cancel Edit' : 'Edit Bug'}
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={handleDownloadPdf}
+              disabled={downloadingPdf}
+              title="Download Defect Report as PDF"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', borderColor: 'var(--accent)', color: 'var(--accent)' }}
+            >
+              <FileDown size={14} />
+              {downloadingPdf ? 'Generating PDF...' : 'Download PDF Report'}
+            </button>
             <button
               className="btn btn-secondary btn-sm danger"
               onClick={handleDeleteBug}
@@ -208,24 +316,48 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
           </div>
         </div>
 
-        {/* Workflow Stepper */}
-        <div className="workflow-stepper">
-          {WORKFLOW_STEPS.map((step, idx) => {
-            const isActive = step.id === currentIssue.status;
-            const isPassed = idx <= currentStepIdx;
-
-            return (
-              <div
-                key={step.id}
-                className={`stepper-step ${isActive ? 'active' : isPassed ? 'passed' : ''}`}
-                onClick={() => handleStatusChange(step.id)}
+        {isEditing ? (
+          <div style={{ marginTop: '1.2rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '1.1rem' }}>
+                <Pencil size={18} /> Edit Defect #{currentIssue.id}
+              </h3>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setIsEditing(false)}
               >
-                <div className="step-number">{idx + 1}</div>
-                <span className="step-label">{step.label}</span>
-              </div>
-            );
-          })}
-        </div>
+                Back to Details
+              </button>
+            </div>
+            <IssueForm
+              initial={currentIssue}
+              projectId={currentIssue.project_id}
+              onSubmit={handleEditSubmit}
+              onCancel={() => setIsEditing(false)}
+              submitLabel="Save Changes"
+            />
+          </div>
+        ) : (
+          <>
+            {/* Workflow Stepper */}
+            <div className="workflow-stepper">
+              {WORKFLOW_STEPS.map((step, idx) => {
+                const isActive = step.id === currentIssue.status;
+                const isPassed = idx <= currentStepIdx;
+
+                return (
+                  <div
+                    key={step.id}
+                    className={`stepper-step ${isActive ? 'active' : isPassed ? 'passed' : ''}`}
+                    onClick={() => handleStatusChange(step.id)}
+                  >
+                    <div className="step-number">{idx + 1}</div>
+                    <span className="step-label">{step.label}</span>
+                  </div>
+                );
+              })}
+            </div>
 
         {/* Metadata Strip */}
         <div className="meta-strip">
@@ -234,8 +366,33 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
             <strong>{currentIssue.reporter?.username || 'System'}</strong>
           </div>
 
+          {currentIssue.category && (
+            <div>
+              <span className="meta-label">Category:</span>{' '}
+              <span className="badge" style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderColor: 'var(--border)' }}>
+                {currentIssue.category}
+              </span>
+            </div>
+          )}
+
+          {currentIssue.module && (
+            <div>
+              <span className="meta-label">Module:</span>{' '}
+              <strong>{currentIssue.module}</strong>
+            </div>
+          )}
+
+          {currentIssue.defect_type && (
+            <div>
+              <span className="meta-label">Type:</span>{' '}
+              <span className="badge" style={{ background: 'var(--bg-dark-accent)', color: 'var(--text)' }}>
+                {currentIssue.defect_type}
+              </span>
+            </div>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span className="meta-label">Assigned Developer:</span>
+            <span className="meta-label">Assigned:</span>
             <select
               value={currentIssue.assigned_developer_id || ''}
               onChange={(e) => handleAssignChange(e.target.value)}
@@ -259,6 +416,19 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
         {/* Tabs */}
         <div className="modal-tabs">
           <button
+            className={`tab-btn ${activeTab === 'resolution' ? 'active' : ''}`}
+            onClick={() => setActiveTab('resolution')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              color: activeTab === 'resolution' ? 'var(--accent)' : 'inherit',
+              fontWeight: '700'
+            }}
+          >
+            <Sparkles size={14} color="#8b5cf6" /> Resolution Assistance
+          </button>
+          <button
             className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
             onClick={() => setActiveTab('overview')}
           >
@@ -280,6 +450,154 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
 
         {/* Tab Content */}
         <div className="modal-tab-body">
+          {activeTab === 'resolution' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              {loadingAssistance ? (
+                <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)' }}>
+                  <Sparkles size={26} style={{ color: 'var(--accent)', animation: 'spin 2s linear infinite' }} />
+                  <p style={{ marginTop: '0.6rem', fontSize: '0.9rem' }}>Analyzing defect patterns and generating resolution intelligence...</p>
+                </div>
+              ) : resolutionAssistance ? (
+                <>
+                  {/* Header Banner */}
+                  <div style={{ background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(124, 58, 237, 0.12))', border: '1px solid rgba(124, 58, 237, 0.25)', borderRadius: 'var(--radius-md)', padding: '1rem 1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                      <h3 style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text)', fontSize: '1.05rem' }}>
+                        <Lightbulb size={18} color="#a855f7" /> Resolution Intelligence Copilot
+                      </h3>
+                      <span className="badge" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', borderColor: '#a855f7', fontSize: '0.74rem' }}>
+                        ✨ Signature Feature
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.86rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                      Diagnostic investigation checklist, similar defect resolutions, and recommended code fix for <strong>"{currentIssue.title}"</strong>.
+                    </p>
+                  </div>
+
+                  {/* Section 1: Possible Investigation Areas */}
+                  <div className="detail-section">
+                    <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent)', margin: '0 0 0.6rem 0' }}>
+                      🔍 Possible Investigation Areas:
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                      {resolutionAssistance.investigation_areas?.map((area, idx) => {
+                        const isChecked = !!checkedAreas[idx];
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => toggleCheckArea(idx)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '0.6rem',
+                              padding: '0.6rem 0.8rem',
+                              borderRadius: 'var(--radius-sm)',
+                              background: isChecked ? 'rgba(5, 150, 105, 0.08)' : 'var(--bg-dark-accent)',
+                              border: `1px solid ${isChecked ? '#059669' : 'var(--border)'}`,
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {isChecked ? (
+                              <CheckSquare size={16} color="#059669" style={{ marginTop: '0.15rem', flexShrink: 0 }} />
+                            ) : (
+                              <Square size={16} color="var(--text-dim)" style={{ marginTop: '0.15rem', flexShrink: 0 }} />
+                            )}
+                            <span style={{ fontSize: '0.88rem', color: isChecked ? 'var(--text-muted)' : 'var(--text)', textDecoration: isChecked ? 'line-through' : 'none' }}>
+                              {area}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Section 2: Similar Defects */}
+                  {resolutionAssistance.similar_defects?.length > 0 && (
+                    <div className="detail-section">
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent)', margin: '0 0 0.6rem 0' }}>
+                        ⚠️ Similar Defects:
+                      </h4>
+                      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                        {resolutionAssistance.similar_defects.map((sd) => (
+                          <div
+                            key={sd.id}
+                            style={{
+                              padding: '0.6rem 0.85rem',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'var(--bg-dark-accent)',
+                              border: '1px solid var(--border)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.6rem',
+                              fontSize: '0.84rem'
+                            }}
+                          >
+                            <span className="bug-id-tag">#{sd.key}</span>
+                            <span style={{ fontWeight: '600', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {sd.title}
+                            </span>
+                            <span className={`badge badge-${sd.status}`}>
+                              {sd.status}
+                            </span>
+                            <span className="badge" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', fontSize: '0.7rem' }}>
+                              {sd.similarity_score}% Match
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Section 3: Previous Resolution */}
+                  {resolutionAssistance.previous_resolution && (
+                    <div style={{ background: 'rgba(5, 150, 105, 0.08)', border: '1px solid rgba(5, 150, 105, 0.25)', borderRadius: 'var(--radius-md)', padding: '0.9rem 1.1rem' }}>
+                      <h4 style={{ margin: '0 0 0.4rem 0', color: '#059669', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        📜 Previous Resolution:
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text)', lineHeight: '1.6' }}>
+                        {resolutionAssistance.previous_resolution}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Section 4: Possible Resolution */}
+                  <div style={{ background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(2, 132, 199, 0.08))', border: '1px solid rgba(79, 70, 229, 0.3)', borderRadius: 'var(--radius-md)', padding: '1rem 1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                      <h4 style={{ margin: 0, color: 'var(--accent)', fontSize: '0.96rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        🚀 Possible Resolution:
+                      </h4>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={handleCopyFix}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                        >
+                          {copiedFix ? <Check size={13} color="#059669" /> : <Copy size={13} />}
+                          {copiedFix ? 'Copied!' : 'Copy Fix'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={handleApplyResolutionComment}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                        >
+                          <ArrowRight size={13} /> Post to Comments
+                        </button>
+                      </div>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text)', lineHeight: '1.65', fontWeight: '500' }}>
+                      {resolutionAssistance.possible_resolution}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <p className="text-muted">No resolution assistance available for this defect.</p>
+              )}
+            </div>
+          )}
+
           {activeTab === 'overview' && (
             <div>
               <div className="detail-section">
@@ -426,6 +744,8 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

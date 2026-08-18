@@ -32,6 +32,13 @@ class UserRoleUpdate(BaseModel):
     role: UserRole
 
 
+class UserProfileUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=3, max_length=100)
+    email: EmailStr | None = None
+    current_password: str | None = None
+    new_password: str | None = Field(default=None, min_length=6, max_length=128)
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -189,6 +196,9 @@ class IssueCreate(BaseModel):
     status: IssueStatus = IssueStatus.OPEN
     os: str | None = None
     browser: str | None = None
+    category: str | None = None
+    module: str | None = None
+    defect_type: str | None = None
     assigned_developer_id: int | None = None
     sprint_id: int | None = None
 
@@ -204,6 +214,9 @@ class IssueUpdate(BaseModel):
     status: IssueStatus | None = None
     os: str | None = None
     browser: str | None = None
+    category: str | None = None
+    module: str | None = None
+    defect_type: str | None = None
     assigned_developer_id: int | None = None
     sprint_id: int | None = None
 
@@ -230,6 +243,9 @@ class IssueResponse(BaseModel):
     status: IssueStatus
     os: str | None
     browser: str | None
+    category: str | None = None
+    module: str | None = None
+    defect_type: str | None = None
     project_id: int
     reporter_id: int
     assigned_developer_id: int | None
@@ -245,6 +261,22 @@ class IssueResponse(BaseModel):
 
 
 # ── AI Features ─────────────────────────────────────────────────────────────
+
+class DefectClassifyRequest(BaseModel):
+    description: str = Field(min_length=1, max_length=5000)
+    title: str | None = None
+
+
+class DefectClassifyResponse(BaseModel):
+    category: str
+    module: str
+    defect_type: str
+    suggested_severity: IssueSeverity
+    suggested_priority: IssuePriority
+    confidence: float = 0.95
+    rationale: str
+    tags: list[str] = []
+
 
 class AIAssistRequest(BaseModel):
     raw_description: str = Field(min_length=1, max_length=5000)
@@ -264,6 +296,7 @@ class CodeFixRequest(BaseModel):
 
 
 class CodeFixResponse(BaseModel):
+    is_correct: bool = False
     user_mistake: str | None = None
     root_cause: str
     explanation: str
@@ -273,12 +306,13 @@ class CodeFixResponse(BaseModel):
 
 
 class SeverityPredictRequest(BaseModel):
-    title: str
-    description: str
+    title: str | None = ""
+    description: str = Field(min_length=1, max_length=5000)
 
 
 class SeverityPredictResponse(BaseModel):
     predicted_severity: IssueSeverity
+    predicted_priority: IssuePriority = IssuePriority.MEDIUM
     confidence: float = 0.95
     rationale: str
 
@@ -307,3 +341,33 @@ class SprintHealthResponse(BaseModel):
     resolved_issues_count: int
     critical_issues_count: int
     recommendations: list[str]
+
+
+class SemanticSearchRequest(BaseModel):
+    project_id: int | None = None
+    query: str = Field(min_length=1, max_length=500)
+    threshold: float = 0.35
+    limit: int = 20
+
+
+class SemanticSearchResponse(BaseModel):
+    query: str
+    results: list[dict] = []
+    total_found: int = 0
+
+
+class ResolutionAssistanceRequest(BaseModel):
+    issue_id: int | None = None
+    title: str
+    description: str = ""
+    category: str | None = None
+    module: str | None = None
+    project_id: int | None = None
+
+
+class ResolutionAssistanceResponse(BaseModel):
+    investigation_areas: list[str]
+    similar_defects: list[dict] = []
+    previous_resolution: str | None = None
+    possible_resolution: str
+    confidence: float = 0.95
