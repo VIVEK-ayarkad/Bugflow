@@ -13,9 +13,10 @@ import {
   Copy,
   Check,
   ArrowRight,
-  ExternalLink,
-  ShieldAlert,
   Pencil,
+  BookOpen,
+  MessageSquare,
+  History,
 } from 'lucide-react';
 import {
   addComment,
@@ -23,6 +24,7 @@ import {
   deleteAttachment,
   deleteComment,
   deleteIssue,
+  downloadAttachmentFile,
   downloadIssuePdf,
   editComment,
   getAttachments,
@@ -58,10 +60,12 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
   const [editingCommentText, setEditingCommentText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingAttId, setDownloadingAttId] = useState(null);
   const [resolutionAssistance, setResolutionAssistance] = useState(null);
   const [loadingAssistance, setLoadingAssistance] = useState(false);
   const [checkedAreas, setCheckedAreas] = useState({});
   const [copiedFix, setCopiedFix] = useState(false);
+  const [copiedHistIdx, setCopiedHistIdx] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
@@ -236,6 +240,18 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
     }
   }
 
+  async function handleDownloadAttachment(att) {
+    if (!att) return;
+    setDownloadingAttId(att.id);
+    try {
+      await downloadAttachmentFile(att.id, att.filename);
+    } catch (err) {
+      alert(`Failed to download attachment: ${err.message}`);
+    } finally {
+      setDownloadingAttId(null);
+    }
+  }
+
   function toggleCheckArea(idx) {
     setCheckedAreas((prev) => ({ ...prev, [idx]: !prev[idx] }));
   }
@@ -245,6 +261,13 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
     navigator.clipboard.writeText(resolutionAssistance.possible_resolution);
     setCopiedFix(true);
     setTimeout(() => setCopiedFix(false), 2500);
+  }
+
+  function handleCopyHistoricalFix(fixText, idx) {
+    if (!fixText) return;
+    navigator.clipboard.writeText(fixText);
+    setCopiedHistIdx(idx);
+    setTimeout(() => setCopiedHistIdx(null), 2500);
   }
 
   async function handleApplyResolutionComment() {
@@ -469,16 +492,74 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
                         ✨ Signature Feature
                       </span>
                     </div>
-                    <p style={{ margin: 0, fontSize: '0.86rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                    <p style={{ margin: '0 0 0.6rem 0', fontSize: '0.86rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
                       Diagnostic investigation checklist, similar defect resolutions, and recommended code fix for <strong>"{currentIssue.title}"</strong>.
                     </p>
+                    {resolutionAssistance.context_signals_used?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: '600' }}>Context Analyzed:</span>
+                        {resolutionAssistance.context_signals_used.map((signal, sIdx) => (
+                          <span
+                            key={sIdx}
+                            className="badge"
+                            style={{
+                              fontSize: '0.7rem',
+                              background: 'rgba(79, 70, 229, 0.15)',
+                              color: '#a5b4fc',
+                              borderColor: 'rgba(99, 102, 241, 0.3)',
+                              textTransform: 'capitalize'
+                            }}
+                          >
+                            ✓ {signal.replace('_', ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Section 1: Possible Investigation Areas */}
+                  {/* Severity Mitigation Strategy */}
+                  {resolutionAssistance.severity_mitigation && (
+                    <div style={{
+                      padding: '0.8rem 1rem',
+                      borderRadius: 'var(--radius-md)',
+                      background: currentIssue.severity === 'critical' ? 'rgba(239, 68, 68, 0.08)' : currentIssue.severity === 'high' ? 'rgba(245, 158, 11, 0.08)' : 'rgba(59, 130, 246, 0.08)',
+                      border: `1px solid ${currentIssue.severity === 'critical' ? 'rgba(239, 68, 68, 0.3)' : currentIssue.severity === 'high' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(59, 130, 246, 0.25)'}`,
+                      fontSize: '0.86rem',
+                      lineHeight: '1.55',
+                      color: 'var(--text)'
+                    }}>
+                      {resolutionAssistance.severity_mitigation}
+                    </div>
+                  )}
+
+                  {/* Section 1: Root Cause Investigation Suggestions */}
                   <div className="detail-section">
-                    <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent)', margin: '0 0 0.6rem 0' }}>
-                      🔍 Possible Investigation Areas:
-                    </h4>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', margin: '0 0 0.4rem 0' }}>
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent)', margin: 0, fontSize: '0.98rem' }}>
+                        🔍 Root Cause Investigation Suggestions:
+                      </h4>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                        {Object.values(checkedAreas).filter(Boolean).length} / {resolutionAssistance.investigation_areas?.length || 0} completed
+                      </span>
+                    </div>
+
+                    {/* Non-guaranteed Advisory Disclaimer */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      padding: '0.45rem 0.75rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(59, 130, 246, 0.06)',
+                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      marginBottom: '0.65rem',
+                      fontSize: '0.78rem',
+                      color: 'var(--text-muted)'
+                    }}>
+                      <Lightbulb size={14} color="#38bdf8" style={{ flexShrink: 0 }} />
+                      <span>{resolutionAssistance.investigation_disclaimer || "These diagnostic suggestions guide developer triage and investigation, but are not guaranteed root causes."}</span>
+                    </div>
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
                       {resolutionAssistance.investigation_areas?.map((area, idx) => {
                         const isChecked = !!checkedAreas[idx];
@@ -549,17 +630,123 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
                     </div>
                   )}
 
-                  {/* Section 3: Previous Resolution */}
-                  {resolutionAssistance.previous_resolution && (
+                  {/* Section 3: Historical Resolution Knowledge Base */}
+                  {resolutionAssistance.historical_resolutions?.length > 0 ? (
+                    <div className="detail-section">
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#10b981', margin: '0 0 0.75rem 0' }}>
+                        <BookOpen size={16} /> Historical Resolution Knowledge Base ({resolutionAssistance.historical_resolutions.length} Resolved Similar Defects):
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                        {resolutionAssistance.historical_resolutions.map((hist, hIdx) => (
+                          <div
+                            key={hist.defect_id || hIdx}
+                            style={{
+                              background: 'var(--bg-dark-accent)',
+                              border: '1px solid rgba(16, 185, 129, 0.25)',
+                              borderRadius: 'var(--radius-md)',
+                              padding: '1rem 1.2rem',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.65rem'
+                            }}
+                          >
+                            {/* Defect Header */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <span className="bug-id-tag">#{hist.defect_key}</span>
+                                <strong style={{ color: 'var(--text)', fontSize: '0.95rem' }}>{hist.title}</strong>
+                                <span className="badge badge-resolved">{hist.status}</span>
+                                <span className={`badge badge-severity badge-${hist.severity.toLowerCase()}`}>{hist.severity}</span>
+                              </div>
+                              <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', fontSize: '0.75rem', fontWeight: '600' }}>
+                                {hist.similarity_score}% Similar
+                              </span>
+                            </div>
+
+                            {/* Previous Root Cause */}
+                            <div style={{
+                              background: 'rgba(245, 158, 11, 0.08)',
+                              border: '1px solid rgba(245, 158, 11, 0.25)',
+                              borderRadius: 'var(--radius-sm)',
+                              padding: '0.6rem 0.8rem',
+                              fontSize: '0.86rem'
+                            }}>
+                              <strong style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem' }}>
+                                🔍 Previous Root Cause:
+                              </strong>
+                              <span style={{ color: 'var(--text)', lineHeight: '1.5' }}>{hist.previous_root_cause}</span>
+                            </div>
+
+                            {/* Previous Resolution */}
+                            <div style={{
+                              background: 'rgba(16, 185, 129, 0.08)',
+                              border: '1px solid rgba(16, 185, 129, 0.25)',
+                              borderRadius: 'var(--radius-sm)',
+                              padding: '0.6rem 0.8rem',
+                              fontSize: '0.86rem'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                                <strong style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                  ✅ Previous Resolution Applied:
+                                </strong>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => handleCopyHistoricalFix(hist.previous_resolution, hIdx)}
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                                >
+                                  {copiedHistIdx === hIdx ? <Check size={12} color="#059669" /> : <Copy size={12} />}
+                                  {copiedHistIdx === hIdx ? 'Copied' : 'Copy'}
+                                </button>
+                              </div>
+                              <span style={{ color: 'var(--text)', lineHeight: '1.5' }}>{hist.previous_resolution}</span>
+                            </div>
+
+                            {/* Relevant Developer Comments */}
+                            {hist.relevant_developer_comments?.length > 0 && (
+                              <div style={{ marginTop: '0.2rem' }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.35rem' }}>
+                                  <MessageSquare size={13} /> Relevant Developer Investigation Comments ({hist.relevant_developer_comments.length}):
+                                </span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  {hist.relevant_developer_comments.slice(0, 3).map((comm, cIdx) => (
+                                    <div
+                                      key={cIdx}
+                                      style={{
+                                        background: 'var(--bg-dark)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: 'var(--radius-sm)',
+                                        padding: '0.5rem 0.75rem',
+                                        fontSize: '0.82rem'
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                          <strong style={{ color: 'var(--accent)' }}>@{comm.author}</strong>
+                                          {comm.role && <span className="badge" style={{ fontSize: '0.65rem' }}>{comm.role}</span>}
+                                        </div>
+                                        {comm.created_at && <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{comm.created_at}</span>}
+                                      </div>
+                                      <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.45' }}>{comm.content}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : resolutionAssistance.previous_resolution ? (
                     <div style={{ background: 'rgba(5, 150, 105, 0.08)', border: '1px solid rgba(5, 150, 105, 0.25)', borderRadius: 'var(--radius-md)', padding: '0.9rem 1.1rem' }}>
                       <h4 style={{ margin: '0 0 0.4rem 0', color: '#059669', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        📜 Previous Resolution:
+                        <BookOpen size={16} /> Previous Resolution Precedent:
                       </h4>
                       <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text)', lineHeight: '1.6' }}>
                         {resolutionAssistance.previous_resolution}
                       </p>
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Section 4: Possible Resolution */}
                   <div style={{ background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(2, 132, 199, 0.08))', border: '1px solid rgba(79, 70, 229, 0.3)', borderRadius: 'var(--radius-md)', padding: '1rem 1.25rem' }}>
@@ -719,15 +906,24 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
                         <span className="att-size">{(att.file_size / 1024).toFixed(1)} KB</span>
                       </div>
                       <div className="att-actions">
-                        <a
-                          href={`/api/attachments/${att.id}/download`}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadAttachment(att)}
+                          disabled={downloadingAttId === att.id}
                           className="btn-link-sm"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.2rem',
+                            cursor: downloadingAttId === att.id ? 'wait' : 'pointer',
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            font: 'inherit',
+                          }}
                         >
-                          <Download size={12} /> Download
-                        </a>
+                          <Download size={12} /> {downloadingAttId === att.id ? 'Downloading...' : 'Download'}
+                        </button>
                         {(user?.id === att.user_id || hasRole('admin')) && (
                           <button
                             className="btn-link-sm danger"

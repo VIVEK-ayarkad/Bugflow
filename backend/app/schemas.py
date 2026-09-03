@@ -1,48 +1,65 @@
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from datetime import datetime, timezone
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.models import IssuePriority, IssueSeverity, IssueStatus, SprintStatus, UserRole
+
+# ── Generic Responses ────────────────────────────────────────────────────────
+
+class MessageResponse(BaseModel):
+    message: str = Field(..., description="Status or confirmation message", examples=["Operation completed successfully."])
+
+
+class HealthResponse(BaseModel):
+    status: str = Field("ok", description="Application operational status", examples=["ok"])
+    app: str = Field("BugFlow API", description="Application service name", examples=["BugFlow API"])
+    version: str = Field("1.0.0", description="API version string", examples=["1.0.0"])
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        description="UTC server timestamp",
+    )
 
 
 # ── Auth & Users ─────────────────────────────────────────────────────────────
 
 class UserCreate(BaseModel):
-    email: EmailStr
-    username: str = Field(min_length=3, max_length=100)
-    password: str = Field(min_length=6, max_length=128)
-    role: UserRole | None = UserRole.REPORTER
+    email: EmailStr = Field(..., description="Valid email address", examples=["tester@example.com"])
+    username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_\.\-]+$", description="Unique username (letters, numbers, dots, hyphens, underscores)", examples=["alex_qa"])
+    password: str = Field(..., min_length=6, max_length=128, description="User password (min 6 characters)", examples=["SecretPass123!"])
+    role: UserRole | None = Field(default=UserRole.REPORTER, description="Assigned user role in BugFlow", examples=["reporter"])
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(..., description="Registered email address", examples=["tester@example.com"])
+    password: str = Field(..., min_length=1, description="Account password", examples=["SecretPass123!"])
 
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    email: str
-    username: str
-    role: UserRole
-    created_at: datetime
+    id: int = Field(..., description="Unique user ID", examples=[1])
+    email: str = Field(..., description="User email address", examples=["alex@bugflow.dev"])
+    username: str = Field(..., description="Unique username", examples=["alex_lead"])
+    role: UserRole = Field(..., description="Assigned role", examples=["admin"])
+    created_at: datetime = Field(..., description="Account creation timestamp")
 
 
 class UserRoleUpdate(BaseModel):
-    role: UserRole
+    role: UserRole = Field(..., description="Updated role for the user", examples=["developer"])
 
 
 class UserProfileUpdate(BaseModel):
-    username: str | None = Field(default=None, min_length=3, max_length=100)
-    email: EmailStr | None = None
-    current_password: str | None = None
-    new_password: str | None = Field(default=None, min_length=6, max_length=128)
+    username: str | None = Field(default=None, min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_\.\-]+$", description="New username", examples=["alex_prime"])
+    email: EmailStr | None = Field(default=None, description="New email address", examples=["alex_prime@bugflow.dev"])
+    current_password: str | None = Field(default=None, min_length=1, description="Current password required for password change")
+    new_password: str | None = Field(default=None, min_length=6, max_length=128, description="New password", examples=["NewSuperPass999!"])
 
 
 class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserResponse
+    access_token: str = Field(..., description="JWT Bearer access token string")
+    token_type: str = Field("bearer", description="Token scheme type", examples=["bearer"])
+    user: UserResponse = Field(..., description="Authenticated user details")
 
 
 class TokenData(BaseModel):
@@ -53,107 +70,119 @@ class TokenData(BaseModel):
 # ── Projects ──────────────────────────────────────────────────────────────────
 
 class ProjectCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    description: str | None = None
+    name: str = Field(..., min_length=1, max_length=200, description="Project title", examples=["Alpha E-Commerce"])
+    description: str | None = Field(default=None, max_length=2000, description="Detailed project description", examples=["Core e-commerce platform defect tracking."])
 
 
 class ProjectUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-    description: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200, description="Updated project title", examples=["Alpha Platform 2.0"])
+    description: str | None = Field(default=None, max_length=2000, description="Updated project description")
 
 
 class ProjectMemberCreate(BaseModel):
-    user_id: int
-    role_in_project: str | None = "Member"
+    user_id: int = Field(..., ge=1, description="Target User ID to add to project", examples=[2])
+    role_in_project: str | None = Field(default="Member", max_length=100, description="Project role or designation", examples=["Lead QA"])
 
 
 class ProjectMemberResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    project_id: int
-    user_id: int
-    role_in_project: str | None
-    created_at: datetime
-    user: UserResponse
+    id: int = Field(..., description="Membership record ID", examples=[1])
+    project_id: int = Field(..., description="Project ID", examples=[10])
+    user_id: int = Field(..., description="User ID", examples=[2])
+    role_in_project: str | None = Field(None, description="Custom role title", examples=["Lead QA"])
+    created_at: datetime = Field(..., description="Timestamp added to project")
+    user: UserResponse = Field(..., description="Member user profile")
 
 
 class ProjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    name: str
-    description: str | None
-    owner_id: int
-    created_at: datetime
-    owner: UserResponse | None = None
-    members: list[ProjectMemberResponse] = []
+    id: int = Field(..., description="Project ID", examples=[10])
+    name: str = Field(..., description="Project name", examples=["BugFlow Core"])
+    description: str | None = Field(None, description="Project description")
+    owner_id: int = Field(..., description="Owner User ID", examples=[1])
+    created_at: datetime = Field(..., description="Project creation timestamp")
+    owner: UserResponse | None = Field(None, description="Project owner user profile")
+    members: list[ProjectMemberResponse] = Field(default_factory=list, description="List of active project members")
 
 
 # ── Sprints ───────────────────────────────────────────────────────────────────
 
 class SprintCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    goal: str | None = None
-    start_date: datetime | None = None
-    end_date: datetime | None = None
+    name: str = Field(..., min_length=1, max_length=200, description="Sprint name", examples=["Sprint 14 - Checkout Hardening"])
+    goal: str | None = Field(default=None, max_length=1000, description="Sprint goal or milestone focus", examples=["Zero critical checkout bugs"])
+    start_date: datetime | None = Field(default=None, description="Sprint starting datetime")
+    end_date: datetime | None = Field(default=None, description="Sprint completion datetime")
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "SprintCreate":
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("Sprint end_date cannot be earlier than start_date")
+        return self
 
 
 class SprintUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-    goal: str | None = None
-    start_date: datetime | None = None
-    end_date: datetime | None = None
-    status: SprintStatus | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200, description="Updated sprint name")
+    goal: str | None = Field(default=None, max_length=1000, description="Updated sprint goal")
+    start_date: datetime | None = Field(default=None, description="Updated start datetime")
+    end_date: datetime | None = Field(default=None, description="Updated end datetime")
+    status: SprintStatus | None = Field(default=None, description="Updated sprint status", examples=["active"])
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "SprintUpdate":
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("Sprint end_date cannot be earlier than start_date")
+        return self
 
 
 class SprintResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    project_id: int
-    name: str
-    goal: str | None
-    start_date: datetime | None
-    end_date: datetime | None
-    status: SprintStatus
-    created_at: datetime
+    id: int = Field(..., description="Sprint ID", examples=[3])
+    project_id: int = Field(..., description="Parent project ID", examples=[10])
+    name: str = Field(..., description="Sprint name", examples=["Sprint 14"])
+    goal: str | None = Field(None, description="Sprint goal")
+    start_date: datetime | None = Field(None, description="Start date")
+    end_date: datetime | None = Field(None, description="End date")
+    status: SprintStatus = Field(..., description="Current sprint status", examples=["active"])
+    created_at: datetime = Field(..., description="Creation timestamp")
 
 
 # ── Comments & Attachments ────────────────────────────────────────────────────
 
 class CommentCreate(BaseModel):
-    content: str = Field(min_length=1)
+    content: str = Field(..., min_length=1, max_length=5000, description="Comment message content", examples=["Investigated logs; looks like an unhandled null in token refresh."])
 
 
 class CommentUpdate(BaseModel):
-    content: str = Field(min_length=1)
+    content: str = Field(..., min_length=1, max_length=5000, description="Updated comment text")
 
 
 class CommentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    issue_id: int
-    user_id: int
-    content: str
-    created_at: datetime
-    updated_at: datetime
-    user: UserResponse
+    id: int = Field(..., description="Comment ID", examples=[12])
+    issue_id: int = Field(..., description="Associated issue ID", examples=[45])
+    user_id: int = Field(..., description="Author user ID", examples=[3])
+    content: str = Field(..., description="Comment text")
+    created_at: datetime = Field(..., description="Timestamp created")
+    updated_at: datetime = Field(..., description="Timestamp last edited")
+    user: UserResponse = Field(..., description="Author user details")
 
 
 class AttachmentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    issue_id: int
-    user_id: int
-    filename: str
-    filepath: str
-    file_type: str
-    file_size: int
-    created_at: datetime
-    user: UserResponse
+    id: int = Field(..., description="Attachment ID", examples=[7])
+    issue_id: int = Field(..., description="Target issue ID", examples=[45])
+    user_id: int = Field(..., description="Uploader user ID", examples=[2])
+    filename: str = Field(..., description="Original filename", examples=["screenshot_checkout_crash.png"])
+    filepath: str = Field(..., description="Static URL / relative file path", examples=["/uploads/abc1234.png"])
+    file_type: str = Field(..., description="MIME content type", examples=["image/png"])
+    file_size: int = Field(..., description="File size in bytes", examples=[1048576])
+    created_at: datetime = Field(..., description="Upload timestamp")
+    user: UserResponse = Field(..., description="Uploader user profile")
 
 
 # ── Activity & Notifications ──────────────────────────────────────────────────
@@ -161,213 +190,261 @@ class AttachmentResponse(BaseModel):
 class ActivityLogResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    issue_id: int | None
-    project_id: int | None
-    user_id: int
-    action: str
-    details: str | None
-    created_at: datetime
-    user: UserResponse
+    id: int = Field(..., description="Activity log record ID", examples=[101])
+    issue_id: int | None = Field(None, description="Related issue ID if applicable", examples=[45])
+    project_id: int | None = Field(None, description="Related project ID if applicable", examples=[10])
+    user_id: int = Field(..., description="User ID who performed action", examples=[1])
+    action: str = Field(..., description="Action title", examples=["Status Changed"])
+    details: str | None = Field(None, description="Descriptive change details", examples=["Bug #45 status changed from 'open' to 'in_progress'"])
+    created_at: datetime = Field(..., description="Activity timestamp")
+    user: UserResponse = Field(..., description="User profile who triggered activity")
 
 
 class NotificationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    user_id: int
-    title: str
-    message: str
-    link: str | None
-    is_read: bool
-    created_at: datetime
+    id: int = Field(..., description="Notification ID", examples=[55])
+    user_id: int = Field(..., description="Target recipient User ID", examples=[2])
+    title: str = Field(..., description="Notification title", examples=["Bug Assigned to You"])
+    message: str = Field(..., description="Notification body message", examples=["You were assigned to Bug #45: Checkout timeout"])
+    link: str | None = Field(None, description="Relative destination link", examples=["/issues/45"])
+    is_read: bool = Field(..., description="Read status flag", examples=[False])
+    created_at: datetime = Field(..., description="Timestamp received")
 
 
-# ── Issues ──────────────────────────────────────────────────────────────────
+# ── Issues ────────────────────────────────────────────────────────────────────
 
 class IssueCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=300)
-    description: str = Field(min_length=1)
-    steps_to_reproduce: str | None = None
-    expected_behavior: str | None = None
-    actual_behavior: str | None = None
-    severity: IssueSeverity = IssueSeverity.MEDIUM
-    priority: IssuePriority = IssuePriority.MEDIUM
-    status: IssueStatus = IssueStatus.OPEN
-    os: str | None = None
-    browser: str | None = None
-    category: str | None = None
-    module: str | None = None
-    defect_type: str | None = None
-    assigned_developer_id: int | None = None
-    sprint_id: int | None = None
+    title: str = Field(..., min_length=1, max_length=300, description="Defect title", examples=["Payment Gateway 500 on card verification"])
+    description: str = Field(..., min_length=1, max_length=20000, description="Defect summary or structured expansion", examples=["When user clicks 'Pay Now', the verification API crashes."])
+    steps_to_reproduce: str | None = Field(default=None, max_length=10000, description="Numbered reproduction steps", examples=["1. Add item to cart\n2. Proceed to checkout\n3. Click Pay Now"])
+    expected_behavior: str | None = Field(default=None, max_length=5000, description="Expected software behavior", examples=["Payment is processed and order receipt shown."])
+    actual_behavior: str | None = Field(default=None, max_length=5000, description="Actual observed defect behavior", examples=["500 Internal Server Error returned by payment endpoint."])
+    severity: IssueSeverity = Field(default=IssueSeverity.MEDIUM, description="Defect severity classification", examples=["high"])
+    priority: IssuePriority = Field(default=IssuePriority.MEDIUM, description="Triage priority level", examples=["high"])
+    status: IssueStatus = Field(default=IssueStatus.OPEN, description="Initial workflow status", examples=["open"])
+    os: str | None = Field(default=None, max_length=100, description="Operating system environment", examples=["macOS Sonoma 14.5"])
+    browser: str | None = Field(default=None, max_length=100, description="Browser environment", examples=["Chrome 126.0"])
+    category: str | None = Field(default=None, max_length=100, description="Defect domain category", examples=["Payment"])
+    module: str | None = Field(default=None, max_length=150, description="Affected component or module", examples=["Checkout / Gateway"])
+    defect_type: str | None = Field(default=None, max_length=100, description="Specific defect type", examples=["Functional Defect"])
+    assigned_developer_id: int | None = Field(default=None, ge=1, description="Assigned developer User ID", examples=[3])
+    sprint_id: int | None = Field(default=None, ge=1, description="Associated Sprint ID", examples=[2])
 
 
 class IssueUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=300)
-    description: str | None = None
-    steps_to_reproduce: str | None = None
-    expected_behavior: str | None = None
-    actual_behavior: str | None = None
-    severity: IssueSeverity | None = None
-    priority: IssuePriority | None = None
-    status: IssueStatus | None = None
-    os: str | None = None
-    browser: str | None = None
-    category: str | None = None
-    module: str | None = None
-    defect_type: str | None = None
-    assigned_developer_id: int | None = None
-    sprint_id: int | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=300, description="Updated defect title")
+    description: str | None = Field(default=None, min_length=1, max_length=20000, description="Updated description")
+    steps_to_reproduce: str | None = Field(default=None, max_length=10000, description="Updated reproduction steps")
+    expected_behavior: str | None = Field(default=None, max_length=5000, description="Updated expected behavior")
+    actual_behavior: str | None = Field(default=None, max_length=5000, description="Updated actual behavior")
+    severity: IssueSeverity | None = Field(default=None, description="Updated severity")
+    priority: IssuePriority | None = Field(default=None, description="Updated priority")
+    status: IssueStatus | None = Field(default=None, description="Updated workflow status")
+    os: str | None = Field(default=None, max_length=100, description="Updated OS environment")
+    browser: str | None = Field(default=None, max_length=100, description="Updated browser")
+    category: str | None = Field(default=None, max_length=100, description="Updated category")
+    module: str | None = Field(default=None, max_length=150, description="Updated module")
+    defect_type: str | None = Field(default=None, max_length=100, description="Updated defect type")
+    assigned_developer_id: int | None = Field(default=None, description="Updated developer assignment")
+    sprint_id: int | None = Field(default=None, description="Updated sprint assignment")
 
 
 class IssueStatusUpdate(BaseModel):
-    status: IssueStatus
+    status: IssueStatus = Field(..., description="Target defect status", examples=["in_progress"])
 
 
 class IssueAssignUpdate(BaseModel):
-    assigned_developer_id: int | None = None
+    assigned_developer_id: int | None = Field(default=None, description="Assigned developer User ID or null to unassign", examples=[3])
 
 
 class IssueResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    title: str
-    description: str
-    steps_to_reproduce: str | None
-    expected_behavior: str | None
-    actual_behavior: str | None
-    severity: IssueSeverity
-    priority: IssuePriority
-    status: IssueStatus
-    os: str | None
-    browser: str | None
-    category: str | None = None
-    module: str | None = None
-    defect_type: str | None = None
-    project_id: int
-    reporter_id: int
-    assigned_developer_id: int | None
-    sprint_id: int | None
-    created_at: datetime
-    updated_at: datetime
+    id: int = Field(..., description="Unique Defect ID", examples=[45])
+    title: str = Field(..., description="Defect title", examples=["Payment Gateway 500"])
+    description: str = Field(..., description="Defect description")
+    steps_to_reproduce: str | None = Field(None, description="Reproduction steps")
+    expected_behavior: str | None = Field(None, description="Expected outcome")
+    actual_behavior: str | None = Field(None, description="Actual outcome")
+    severity: IssueSeverity = Field(..., description="Severity level", examples=["high"])
+    priority: IssuePriority = Field(..., description="Priority level", examples=["high"])
+    status: IssueStatus = Field(..., description="Workflow status", examples=["open"])
+    os: str | None = Field(None, description="Operating system")
+    browser: str | None = Field(None, description="Browser")
+    category: str | None = Field(None, description="Category taxonomy", examples=["Payment"])
+    module: str | None = Field(None, description="Affected module", examples=["Checkout / Gateway"])
+    defect_type: str | None = Field(None, description="Defect classification", examples=["Functional Defect"])
+    project_id: int = Field(..., description="Parent project ID", examples=[10])
+    reporter_id: int = Field(..., description="Reporter user ID", examples=[1])
+    assigned_developer_id: int | None = Field(None, description="Assigned developer User ID", examples=[3])
+    sprint_id: int | None = Field(None, description="Sprint ID", examples=[2])
+    created_at: datetime = Field(..., description="Ticket creation timestamp")
+    updated_at: datetime = Field(..., description="Last modification timestamp")
 
-    reporter: UserResponse | None = None
-    assigned_developer: UserResponse | None = None
-    sprint: SprintResponse | None = None
-    comments_count: int = 0
-    attachments_count: int = 0
+    reporter: UserResponse | None = Field(None, description="Reporter user profile")
+    assigned_developer: UserResponse | None = Field(None, description="Assigned developer user profile")
+    sprint: SprintResponse | None = Field(None, description="Assigned sprint details")
+    comments_count: int = Field(0, description="Total comments on defect", examples=[3])
+    attachments_count: int = Field(0, description="Total files attached", examples=[1])
 
 
-# ── AI Features ─────────────────────────────────────────────────────────────
+# ── AI Features ───────────────────────────────────────────────────────────────
 
 class DefectClassifyRequest(BaseModel):
-    description: str = Field(min_length=1, max_length=5000)
-    title: str | None = None
+    description: str = Field(..., min_length=1, max_length=5000, description="Defect text or error trace", examples=["When clicking checkout, payment gateway crashes with 500 timeout."])
+    title: str | None = Field(default=None, max_length=300, description="Optional defect title", examples=["Payment timeout error"])
 
 
 class DefectClassifyResponse(BaseModel):
-    category: str
-    module: str
-    defect_type: str
-    suggested_severity: IssueSeverity
-    suggested_priority: IssuePriority
-    confidence: float = 0.95
-    rationale: str
-    tags: list[str] = []
+    category: str = Field(..., description="Recommended category", examples=["Payment"])
+    module: str = Field(..., description="Recommended component/module", examples=["Checkout / Gateway"])
+    defect_type: str = Field(..., description="Recommended defect type", examples=["Functional Defect"])
+    suggested_severity: IssueSeverity = Field(..., description="Suggested severity", examples=["high"])
+    suggested_priority: IssuePriority = Field(..., description="Suggested priority", examples=["high"])
+    confidence: float = Field(0.95, ge=0.0, le=1.0, description="Classification confidence score", examples=[0.95])
+    rationale: str = Field(..., description="AI classification reasoning", examples=["Payment issues block core transaction flows."])
+    tags: list[str] = Field(default_factory=list, description="Suggested diagnostic tags", examples=[["payment", "checkout", "gateway"]])
 
 
 class AIAssistRequest(BaseModel):
-    raw_description: str = Field(min_length=1, max_length=5000)
+    raw_description: str = Field(..., min_length=1, max_length=5000, description="Raw, brief, or unstructured bug notes", examples=["cant login on mac safari getting error"])
 
 
 class AIAssistResponse(BaseModel):
-    needs_more_info: bool
-    follow_up_questions: list[str] = []
-    formatted_report: dict | None = None
-    message: str
+    needs_more_info: bool = Field(False, description="Flag indicating if more information is required from reporter")
+    follow_up_questions: list[str] = Field(default_factory=list, description="Follow-up diagnostic questions if notes are insufficient")
+    formatted_report: dict[str, Any] | None = Field(None, description="Structured line-by-line formatted defect report")
+    message: str = Field(..., description="AI Copilot conversational status message")
 
 
 class CodeFixRequest(BaseModel):
-    code: str = Field(min_length=1, max_length=10000)
-    error_log: str | None = None
-    language: str | None = "javascript"
+    code: str = Field(..., min_length=1, max_length=20000, description="Faulty or buggy code snippet to diagnose and repair", examples=['function getPrice(item) { return item.price * 1.15; }'])
+    error_log: str | None = Field(default=None, max_length=5000, description="Optional error trace or console log", examples=["TypeError: Cannot read properties of undefined (reading 'price')"])
+    language: str | None = Field(default="javascript", max_length=50, description="Programming language identifier", examples=["javascript"])
+    audit_profile: str = Field(default="comprehensive", description="Diagnostic lens: comprehensive, security, performance, concurrency, resource_safety, unit_tests")
 
 
 class CodeFixResponse(BaseModel):
-    is_correct: bool = False
-    user_mistake: str | None = None
-    root_cause: str
-    explanation: str
-    corrected_code: str
-    diff_lines: list[dict] = []
-    prevention_tip: str
+    is_correct: bool = Field(False, description="Whether original input code was already syntactically and semantically correct")
+    user_mistake: str | None = Field(None, description="Summary of user syntax or logic mistake")
+    root_cause: str = Field(..., description="Deep technical root cause analysis")
+    explanation: str = Field(..., description="Explanation of proposed code fix")
+    corrected_code: str = Field(..., description="Direct corrected code snippet ready for deployment")
+    diff_lines: list[dict[str, Any]] = Field(default_factory=list, description="Unified line-by-line diff metadata")
+    prevention_tip: str = Field(..., description="Best practice tip to prevent recurring bugs")
+    security_findings: list[dict[str, Any]] = Field(default_factory=list, description="OWASP/CWE security and vulnerability audit")
+    complexity_analysis: dict[str, Any] | None = Field(None, description="Big-O time and space complexity comparison")
+    concurrency_risks: list[str] = Field(default_factory=list, description="Thread-safety, deadlock, and race condition warnings")
+    generated_unit_tests: str | None = Field(None, description="Automated executable unit & regression test suite (PyTest / Jest / JUnit)")
+    resilience_patterns: list[str] = Field(default_factory=list, description="Applied fault-tolerance patterns: Circuit Breaker, Exponential Backoff, Idempotency")
+    ast_verified: bool = Field(default=True, description="True if corrected code was compiled and validated via language parser")
 
 
 class SeverityPredictRequest(BaseModel):
-    title: str | None = ""
-    description: str = Field(min_length=1, max_length=5000)
+    title: str | None = Field(default="", max_length=300, description="Defect title")
+    description: str = Field(..., min_length=1, max_length=5000, description="Defect description or impact scope", examples=["All users unable to complete purchases across site."])
 
 
 class SeverityPredictResponse(BaseModel):
-    predicted_severity: IssueSeverity
-    predicted_priority: IssuePriority = IssuePriority.MEDIUM
-    confidence: float = 0.95
-    rationale: str
+    predicted_severity: IssueSeverity = Field(..., description="Predicted severity level", examples=["critical"])
+    predicted_priority: IssuePriority = Field(IssuePriority.MEDIUM, description="Predicted priority level", examples=["critical"])
+    confidence: float = Field(0.95, ge=0.0, le=1.0, description="Prediction confidence score")
+    rationale: str = Field(..., description="Impact reasoning justifying severity assessment")
 
 
 class DuplicateDetectRequest(BaseModel):
-    project_id: int
-    title: str
-    description: str
+    project_id: int = Field(..., ge=1, description="Target Project ID to search within", examples=[10])
+    title: str = Field(..., min_length=1, max_length=300, description="Title of new defect candidate")
+    description: str = Field(..., min_length=1, max_length=5000, description="Description of new defect candidate")
 
 
 class DuplicateDetectResponse(BaseModel):
-    has_duplicates: bool
-    potential_duplicates: list[dict] = []
+    has_duplicates: bool = Field(..., description="True if potential duplicates exceeding confidence threshold were detected")
+    potential_duplicates: list[dict[str, Any]] = Field(default_factory=list, description="Matching historical defect records with similarity scores")
 
 
 class SprintHealthRequest(BaseModel):
-    sprint_id: int
+    sprint_id: int = Field(..., ge=1, description="Sprint ID to analyze")
 
 
 class SprintHealthResponse(BaseModel):
-    sprint_id: int
-    sprint_name: str
-    risk_level: str  # "Low", "Medium", "High", "Critical"
-    health_score: int  # 0 to 100
-    open_issues_count: int
-    resolved_issues_count: int
-    critical_issues_count: int
-    recommendations: list[str]
+    sprint_id: int = Field(..., description="Analyzed Sprint ID", examples=[3])
+    sprint_name: str = Field(..., description="Sprint name", examples=["Sprint 14"])
+    risk_level: str = Field(..., description="Sprint risk classification: Low, Medium, High, Critical", examples=["Medium"])
+    health_score: int = Field(..., ge=0, le=100, description="Overall health score (0-100)", examples=[78])
+    open_issues_count: int = Field(..., description="Active open issues count in sprint", examples=[4])
+    resolved_issues_count: int = Field(..., description="Completed issues count", examples=[8])
+    critical_issues_count: int = Field(..., description="Critical defect count in sprint", examples=[1])
+    recommendations: list[str] = Field(default_factory=list, description="Actionable recommendations to ensure sprint success")
 
 
 class SemanticSearchRequest(BaseModel):
-    project_id: int | None = None
-    query: str = Field(min_length=1, max_length=500)
-    threshold: float = 0.35
-    limit: int = 20
+    project_id: int | None = Field(default=None, ge=1, description="Optional Project ID filter")
+    query: str = Field(..., min_length=1, max_length=500, description="Conceptual or keyword search phrase", examples=["transaction crashes during checkout"])
+    threshold: float = Field(default=0.35, ge=0.0, le=1.0, description="Vector similarity cutoff threshold", examples=[0.35])
+    limit: int = Field(default=20, ge=1, le=100, description="Maximum number of defect matches to return", examples=[20])
 
 
 class SemanticSearchResponse(BaseModel):
-    query: str
-    results: list[dict] = []
-    total_found: int = 0
+    query: str = Field(..., description="Processed query term")
+    results: list[dict[str, Any]] = Field(default_factory=list, description="Ranked defect matches with confidence scores")
+    total_found: int = Field(..., description="Total matching defects found", examples=[2])
 
 
 class ResolutionAssistanceRequest(BaseModel):
-    issue_id: int | None = None
-    title: str
-    description: str = ""
-    category: str | None = None
-    module: str | None = None
-    project_id: int | None = None
+    issue_id: int | None = Field(default=None, ge=1, description="Existing Issue ID if generating for a saved ticket")
+    title: str = Field(..., min_length=1, max_length=300, description="Defect title", examples=["Payment Gateway 500"])
+    description: str = Field(default="", max_length=10000, description="Defect description")
+    category: str | None = Field(default=None, max_length=100, description="Category classification", examples=["Payment"])
+    module: str | None = Field(default=None, max_length=150, description="Affected module", examples=["Checkout / Gateway"])
+    severity: IssueSeverity | str | None = Field(default=None, description="Defect severity classification", examples=["high"])
+    comments: list[str] | str | None = Field(default=None, description="Discussion comments or developer diagnostic notes on this ticket")
+    project_id: int | None = Field(default=None, ge=1, description="Project ID for historical defect context")
+
+
+class HistoricalDeveloperComment(BaseModel):
+    author: str = Field(..., description="Author username", examples=["alex_dev"])
+    role: str | None = Field(default=None, description="Author role", examples=["developer"])
+    content: str = Field(..., description="Comment body", examples=["Patched null check on payment payload."])
+    created_at: str | None = Field(default=None, description="Comment timestamp")
+
+
+class HistoricalResolutionDetail(BaseModel):
+    defect_id: int = Field(..., description="Related Defect ID", examples=[102])
+    defect_key: str = Field(..., description="Defect ticket key", examples=["DEF-102"])
+    title: str = Field(..., description="Related Defect title", examples=["Stripe checkout timeout on submission"])
+    severity: str = Field(..., description="Severity level", examples=["high"])
+    status: str = Field(..., description="Defect status (Resolved / Closed)", examples=["resolved"])
+    similarity_score: float = Field(..., description="Similarity match percentage (0-100)", examples=[94.5])
+    previous_root_cause: str = Field(..., description="Identified root cause of the historical defect", examples=["Unhandled null response from payment gateway SDK."])
+    previous_resolution: str = Field(..., description="Concrete code or configuration fix applied", examples=["Added null safety check and retry policy with exponential backoff."])
+    relevant_developer_comments: list[HistoricalDeveloperComment] = Field(default_factory=list, description="Relevant developer comments explaining the fix")
 
 
 class ResolutionAssistanceResponse(BaseModel):
-    investigation_areas: list[str]
-    similar_defects: list[dict] = []
-    previous_resolution: str | None = None
-    possible_resolution: str
-    confidence: float = 0.95
+    investigation_areas: list[str] = Field(default_factory=list, description="Checklist of diagnostic inspection areas")
+    investigation_disclaimer: str = Field(
+        default="These diagnostic suggestions guide developer triage and investigation, but are not guaranteed root causes.",
+        description="Explicit advisory disclaimer that suggestions are investigative starting points"
+    )
+    similar_defects: list[dict[str, Any]] = Field(default_factory=list, description="Historical related defects with resolution notes")
+    historical_resolutions: list[HistoricalResolutionDetail] = Field(default_factory=list, description="Detailed historical resolution records acting as developer knowledge base")
+    previous_resolution: str | None = Field(None, description="Summary of how similar historical bugs were resolved")
+    possible_resolution: str = Field(..., description="Recommended technical code fix and diagnostic instructions")
+    severity_mitigation: str | None = Field(None, description="Severity-specific mitigation advice and triage urgency")
+    context_signals_used: list[str] = Field(default_factory=list, description="Context sources incorporated into resolution guidance: description, category, severity, comments, similar_defects, historical_resolutions")
+    confidence: float = Field(0.95, ge=0.0, le=1.0, description="Assistance confidence level")
+
+
+# ── Admin & Dashboard ─────────────────────────────────────────────────────────
+
+class AdminMetrics(BaseModel):
+    total_users: int = Field(..., description="Total registered users")
+    total_projects: int = Field(..., description="Total active projects")
+    total_bugs: int = Field(..., description="Total defects logged across system")
+
+
+class AdminReportsResponse(BaseModel):
+    system_metrics: AdminMetrics
+    users_by_role: dict[str, int] = Field(..., description="Distribution of users across system roles")

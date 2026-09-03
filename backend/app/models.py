@@ -1,10 +1,15 @@
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+def utc_now() -> datetime:
+    """Return naive UTC datetime without Python 3.12 deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class UserRole(str, enum.Enum):
@@ -53,7 +58,7 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole), default=UserRole.REPORTER, nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     owned_projects: Mapped[list["Project"]] = relationship(back_populates="owner")
     project_memberships: Mapped[list["ProjectMember"]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -77,7 +82,7 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     owner: Mapped["User"] = relationship(back_populates="owned_projects")
     members: Mapped[list["ProjectMember"]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -92,7 +97,7 @@ class ProjectMember(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     role_in_project: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     project: Mapped["Project"] = relationship(back_populates="members")
     user: Mapped["User"] = relationship(back_populates="project_memberships")
@@ -110,7 +115,7 @@ class Sprint(Base):
     status: Mapped[SprintStatus] = mapped_column(
         Enum(SprintStatus), default=SprintStatus.PLANNING, nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     project: Mapped["Project"] = relationship(back_populates="sprints")
     issues: Mapped[list["Issue"]] = relationship(back_populates="sprint")
@@ -143,9 +148,9 @@ class Issue(Base):
     reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     assigned_developer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     sprint_id: Mapped[int | None] = mapped_column(ForeignKey("sprints.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utc_now, onupdate=utc_now
     )
 
     project: Mapped["Project"] = relationship(back_populates="issues")
@@ -170,9 +175,9 @@ class Comment(Base):
     issue_id: Mapped[int] = mapped_column(ForeignKey("issues.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utc_now, onupdate=utc_now
     )
 
     issue: Mapped["Issue"] = relationship(back_populates="comments")
@@ -189,7 +194,7 @@ class Attachment(Base):
     filepath: Mapped[str] = mapped_column(String(500), nullable=False)
     file_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     issue: Mapped["Issue"] = relationship(back_populates="attachments")
     user: Mapped["User"] = relationship(back_populates="attachments")
@@ -204,7 +209,7 @@ class ActivityLog(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     issue: Mapped["Issue | None"] = relationship(back_populates="activity_logs")
     project: Mapped["Project | None"] = relationship()
@@ -220,6 +225,6 @@ class Notification(Base):
     message: Mapped[str] = mapped_column(Text, nullable=False)
     link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     user: Mapped["User"] = relationship(back_populates="notifications")

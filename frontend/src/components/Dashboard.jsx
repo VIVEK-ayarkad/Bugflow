@@ -26,6 +26,14 @@ import {
   X,
   FileDown,
   Pencil,
+  Clock,
+  CheckCircle,
+  CheckCircle2,
+  TrendingUp,
+  Layers,
+  BarChart3,
+  AlertCircle,
+  Activity,
 } from 'lucide-react';
 import {
   addProjectMember,
@@ -62,7 +70,7 @@ function Badge({ value }) {
   );
 }
 
-// ── SVG Charts Components ───────────────────────────────────────────────────
+// ── SVG Charts & Analytics Components ─────────────────────────────────────────
 
 function SeverityChart({ data = {} }) {
   const total = Object.values(data).reduce((a, b) => a + b, 0) || 1;
@@ -75,26 +83,41 @@ function SeverityChart({ data = {} }) {
 
   return (
     <div className="chart-card">
-      <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-        <Flame size={16} color="#ef4444" /> Bugs by Severity
-      </h4>
-      <div className="severity-bar-container" style={{ margin: '1rem 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
+          <Flame size={16} color="#ef4444" /> Defects by Severity
+        </h4>
+        <span style={{ fontSize: '0.72rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.12)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+          {data.critical || 0} Critical
+        </span>
+      </div>
+
+      <div className="severity-bar-container" style={{ margin: '0.85rem 0' }}>
         <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', background: 'var(--bg-dark-accent)', border: '1px solid var(--border)' }}>
           {items.map((item, i) => {
             const pct = (item.count / total) * 100;
             if (pct === 0) return null;
-            return <div key={i} style={{ width: `${pct}%`, background: item.color }} title={`${item.label}: ${item.count}`} />;
+            return <div key={i} style={{ width: `${pct}%`, background: item.color }} title={`${item.label}: ${item.count} (${Math.round(pct)}%)`} />;
           })}
         </div>
       </div>
+
       <div className="chart-legend" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-        {items.map((item, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color }} />
-            <span>{item.label}:</span>
-            <strong>{item.count}</strong>
-          </div>
-        ))}
+        {items.map((item, i) => {
+          const pct = Math.round((item.count / total) * 100);
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.2rem 0.35rem', background: 'var(--bg-dark-accent)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: item.color }} />
+                <span style={{ color: 'var(--text)' }}>{item.label}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{pct}%</span>
+                <strong>{item.count}</strong>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -112,23 +135,32 @@ function StatusChart({ data = {} }) {
 
   return (
     <div className="chart-card">
-      <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-        <Zap size={16} color="var(--accent)" /> Bugs by Status
-      </h4>
-      <div style={{ margin: '1rem 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
+          <Zap size={16} color="var(--accent)" /> Defects by Status
+        </h4>
+        <span style={{ fontSize: '0.72rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '12px', background: 'var(--accent-light)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
+          {items.reduce((a, b) => a + b.count, 0)} Total
+        </span>
+      </div>
+
+      <div style={{ margin: '0.85rem 0' }}>
         <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', background: 'var(--bg-dark-accent)', border: '1px solid var(--border)' }}>
           {items.map((item, i) => {
             const pct = (item.count / total) * 100;
             if (pct === 0) return null;
-            return <div key={i} style={{ width: `${pct}%`, background: item.color }} title={`${item.label}: ${item.count}`} />;
+            return <div key={i} style={{ width: `${pct}%`, background: item.color }} title={`${item.label}: ${item.count} (${Math.round(pct)}%)`} />;
           })}
         </div>
       </div>
-      <div className="chart-legend" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+
+      <div className="chart-legend" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '0.45rem' }}>
         {items.map((item, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color }} />
-            <span>{item.label}:</span>
+          <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.25rem 0.4rem', background: 'var(--bg-dark-accent)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: item.color }} />
+              <span style={{ color: 'var(--text)', fontSize: '0.76rem' }}>{item.label}</span>
+            </div>
             <strong>{item.count}</strong>
           </div>
         ))}
@@ -137,16 +169,90 @@ function StatusChart({ data = {} }) {
   );
 }
 
-function MonthlyChart({ data = [] }) {
-  const defaultMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-  const chartData = data.length > 0 ? data : defaultMonths.map((m) => ({ month: m, count: 0 }));
-  
-  const counts = chartData.map((d) => d.count);
-  const maxVal = Math.max(...counts, 4);
-  const totalBugs = counts.reduce((a, b) => a + b, 0);
+function CategoryChart({ data = [] }) {
+  const categoryColors = [
+    '#6366f1', // Indigo
+    '#0ea5e9', // Sky
+    '#10b981', // Emerald
+    '#f59e0b', // Amber
+    '#ec4899', // Pink
+    '#8b5cf6', // Purple
+    '#14b8a6', // Teal
+    '#f97316', // Orange
+    '#64748b', // Slate
+  ];
 
-  const svgWidth = 400;
-  const svgHeight = 160;
+  const total = data.reduce((acc, curr) => acc + curr.count, 0) || 1;
+
+  return (
+    <div className="chart-card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
+          <Layers size={16} color="var(--accent)" /> Defects by Category
+        </h4>
+        <span style={{ fontSize: '0.72rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '12px', background: 'var(--accent-light)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
+          {data.length} {data.length === 1 ? 'Category' : 'Categories'}
+        </span>
+      </div>
+
+      {data.length === 0 ? (
+        <p className="text-muted" style={{ fontSize: '0.85rem', margin: '1rem 0' }}>No categorized defects yet.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '0.5rem' }}>
+          {/* Segmented multi-color bar */}
+          <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', background: 'var(--bg-dark-accent)', border: '1px solid var(--border)' }}>
+            {data.map((item, i) => {
+              const pct = (item.count / total) * 100;
+              if (pct === 0) return null;
+              const color = categoryColors[i % categoryColors.length];
+              return (
+                <div
+                  key={i}
+                  style={{ width: `${pct}%`, background: color }}
+                  title={`${item.category}: ${item.count} (${item.percentage}%)`}
+                />
+              );
+            })}
+          </div>
+
+          {/* Category List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+            {data.map((item, i) => {
+              const color = categoryColors[i % categoryColors.length];
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.25rem 0.4rem', background: 'var(--bg-dark-accent)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0, flex: 1 }}>
+                    <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text)' }} title={item.category}>
+                      {item.category}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--text-dim)', fontWeight: '600' }}>{item.percentage}%</span>
+                    <strong style={{ minWidth: '20px', textAlign: 'right', color: 'var(--text)' }}>{item.count}</strong>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DefectTrendsChart({ data = [] }) {
+  const defaultMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+  const chartData = data.length > 0 ? data : defaultMonths.map((m) => ({ month: m, created_count: 0, resolved_count: 0 }));
+  
+  const createdCounts = chartData.map((d) => d.created_count ?? d.count ?? 0);
+  const resolvedCounts = chartData.map((d) => d.resolved_count ?? 0);
+  const maxVal = Math.max(...createdCounts, ...resolvedCounts, 4);
+  const totalCreated = createdCounts.reduce((a, b) => a + b, 0);
+  const totalResolved = resolvedCounts.reduce((a, b) => a + b, 0);
+
+  const svgWidth = 440;
+  const svgHeight = 175;
   const paddingLeft = 32;
   const paddingBottom = 25;
   const paddingTop = 25;
@@ -154,17 +260,23 @@ function MonthlyChart({ data = [] }) {
 
   const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
-  const barWidth = Math.min(26, (chartWidth / chartData.length) * 0.55);
+  const groupWidth = chartWidth / chartData.length;
+  const barWidth = Math.min(14, groupWidth * 0.32);
 
   return (
     <div className="chart-card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
-          <Calendar size={16} color="var(--accent)" /> Monthly Bug Reports
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
+          <TrendingUp size={16} color="var(--accent)" /> Defect Trends (Created vs Resolved)
         </h4>
-        <span style={{ fontSize: '0.75rem', fontWeight: '700', padding: '0.15rem 0.55rem', borderRadius: '12px', background: 'var(--accent-light)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
-          {totalBugs} total
-        </span>
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', fontSize: '0.74rem', fontWeight: '700' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: '#6366f1' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#6366f1' }} /> Created ({totalCreated})
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: '#10b981' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#10b981' }} /> Resolved ({totalResolved})
+          </span>
+        </div>
       </div>
 
       <div style={{ width: '100%', overflowX: 'auto' }}>
@@ -204,41 +316,72 @@ function MonthlyChart({ data = [] }) {
 
           {/* Bars and Month Labels */}
           {chartData.map((item, i) => {
-            const step = chartWidth / chartData.length;
-            const x = paddingLeft + i * step + (step - barWidth) / 2;
-            const height = maxVal > 0 ? (item.count / maxVal) * chartHeight : 0;
-            const y = paddingTop + chartHeight - height;
+            const created = item.created_count ?? item.count ?? 0;
+            const resolved = item.resolved_count ?? 0;
+            
+            const groupX = paddingLeft + i * groupWidth;
+            const createdX = groupX + (groupWidth - barWidth * 2 - 4) / 2;
+            const resolvedX = createdX + barWidth + 4;
+
+            const cHeight = maxVal > 0 ? (created / maxVal) * chartHeight : 0;
+            const cY = paddingTop + chartHeight - cHeight;
+
+            const rHeight = maxVal > 0 ? (resolved / maxVal) * chartHeight : 0;
+            const rY = paddingTop + chartHeight - rHeight;
 
             return (
               <g key={i} className="svg-bar-group" style={{ cursor: 'pointer' }}>
-                {/* Value Label above Bar */}
-                <text
-                  x={x + barWidth / 2}
-                  y={y - 5}
-                  textAnchor="middle"
-                  fill={item.count > 0 ? 'var(--accent)' : 'var(--text-dim)'}
-                  fontSize="10"
-                  fontWeight="700"
-                >
-                  {item.count}
-                </text>
-
-                {/* Bar Rect */}
+                {/* Created Bar */}
+                {created > 0 && (
+                  <text
+                    x={createdX + barWidth / 2}
+                    y={cY - 4}
+                    textAnchor="middle"
+                    fill="#6366f1"
+                    fontSize="9"
+                    fontWeight="700"
+                  >
+                    {created}
+                  </text>
+                )}
                 <rect
-                  x={x}
-                  y={Math.min(y, paddingTop + chartHeight - 3)}
+                  x={createdX}
+                  y={Math.min(cY, paddingTop + chartHeight - 2)}
                   width={barWidth}
-                  height={Math.max(height, 3)}
-                  rx="4"
-                  ry="4"
-                  fill={item.count > 0 ? 'url(#friendlyIndigoGrad)' : 'var(--bg-dark-accent)'}
-                  stroke={item.count > 0 ? 'var(--accent)' : 'var(--border)'}
-                  strokeWidth="1"
+                  height={Math.max(cHeight, 2)}
+                  rx="3"
+                  ry="3"
+                  fill="#6366f1"
+                  title={`Created: ${created}`}
+                />
+
+                {/* Resolved Bar */}
+                {resolved > 0 && (
+                  <text
+                    x={resolvedX + barWidth / 2}
+                    y={rY - 4}
+                    textAnchor="middle"
+                    fill="#10b981"
+                    fontSize="9"
+                    fontWeight="700"
+                  >
+                    {resolved}
+                  </text>
+                )}
+                <rect
+                  x={resolvedX}
+                  y={Math.min(rY, paddingTop + chartHeight - 2)}
+                  width={barWidth}
+                  height={Math.max(rHeight, 2)}
+                  rx="3"
+                  ry="3"
+                  fill="#10b981"
+                  title={`Resolved: ${resolved}`}
                 />
 
                 {/* X-Axis Month Label */}
                 <text
-                  x={x + barWidth / 2}
+                  x={groupX + groupWidth / 2}
                   y={svgHeight - 6}
                   textAnchor="middle"
                   fill="var(--text-muted)"
@@ -250,14 +393,6 @@ function MonthlyChart({ data = [] }) {
               </g>
             );
           })}
-
-          {/* SVG Gradient Defs */}
-          <defs>
-            <linearGradient id="friendlyIndigoGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#4f46e5" />
-              <stop offset="100%" stopColor="#0284c7" />
-            </linearGradient>
-          </defs>
         </svg>
       </div>
     </div>
@@ -269,28 +404,127 @@ function WorkloadChart({ data = [] }) {
 
   return (
     <div className="chart-card">
-      <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-        <Users size={16} color="var(--accent)" /> Developer Workload
-      </h4>
-      <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
+          <Users size={16} color="var(--accent)" /> Developer Workload
+        </h4>
+        <span style={{ fontSize: '0.72rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '12px', background: 'var(--accent-light)', color: 'var(--accent)', border: '1px solid var(--border)' }}>
+          {data.length} assigned
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginTop: '0.4rem', maxHeight: '200px', overflowY: 'auto', paddingRight: '0.25rem' }}>
         {data.length === 0 ? (
-          <p className="text-muted">No assigned workload.</p>
+          <p className="text-muted" style={{ fontSize: '0.85rem' }}>No assigned workload.</p>
         ) : (
           data.map((item, i) => {
-            const widthPct = (item.count / maxCount) * 100;
+            const activeCount = item.active_count ?? (item.open_count + item.in_progress_count + item.in_review_count);
+            const resolvedCount = item.resolved_count ?? 0;
+            const totalCount = item.count || (activeCount + resolvedCount);
+            const activePct = totalCount > 0 ? (activeCount / totalCount) * 100 : 0;
+            const resolvedPct = totalCount > 0 ? (resolvedCount / totalCount) * 100 : 0;
+
             return (
-              <div key={i}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
-                  <span>{item.developer}</span>
-                  <strong>{item.count} bugs</strong>
+              <div key={i} style={{ padding: '0.5rem 0.65rem', background: 'var(--bg-dark-accent)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--accent-light)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: '800' }}>
+                      {item.developer?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <span style={{ fontWeight: '700', color: 'var(--text)' }}>{item.developer}</span>
+                    {item.critical_count > 0 && (
+                      <span style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontWeight: '700' }}>
+                        {item.critical_count} critical
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    <strong style={{ color: 'var(--accent)' }}>{activeCount}</strong> active / <strong style={{ color: '#10b981' }}>{resolvedCount}</strong> done
+                  </div>
                 </div>
-                <div style={{ height: '8px', background: 'var(--bg-dark-accent)', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                  <div style={{ width: `${Math.max(widthPct, 4)}%`, height: '100%', background: 'linear-gradient(90deg, #4f46e5, #0284c7)', borderRadius: '4px' }} />
+
+                {/* Progress bar with active vs resolved */}
+                <div style={{ height: '7px', background: 'var(--surface)', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)', display: 'flex' }}>
+                  {activeCount > 0 && (
+                    <div style={{ width: `${activePct}%`, background: '#6366f1' }} title={`Active: ${activeCount}`} />
+                  )}
+                  {resolvedCount > 0 && (
+                    <div style={{ width: `${resolvedPct}%`, background: '#10b981' }} title={`Resolved: ${resolvedCount}`} />
+                  )}
                 </div>
               </div>
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+function ResolutionTimeChart({ summary = {}, data = {} }) {
+  const avgTime = summary.avg_resolution_time_formatted || 'N/A';
+  const resolutionRate = summary.resolution_rate ?? 0;
+  const resolvedCount = summary.total_resolved_and_closed || 0;
+  const totalCount = summary.total_bugs || 0;
+
+  const severityOrder = [
+    { key: 'critical', label: 'Critical', color: '#ef4444' },
+    { key: 'high', label: 'High', color: '#f97316' },
+    { key: 'medium', label: 'Medium', color: '#eab308' },
+    { key: 'low', label: 'Low', color: '#3b82f6' },
+  ];
+
+  return (
+    <div className="chart-card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
+          <Clock size={16} color="var(--accent)" /> Average Resolution Time (MTTR)
+        </h4>
+        <span style={{ fontSize: '0.72rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.12)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+          {resolutionRate}% Resolved
+        </span>
+      </div>
+
+      {/* Main Stat Highlight */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', margin: '0.5rem 0 0.85rem 0', padding: '0.65rem 0.85rem', background: 'var(--bg-dark-accent)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+        <div>
+          <span style={{ fontSize: '1.6rem', fontWeight: '800', fontFamily: 'var(--display)', color: 'var(--accent)' }}>
+            {avgTime}
+          </span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginLeft: '0.5rem', fontWeight: '600' }}>
+            Overall MTTR
+          </span>
+        </div>
+        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text)' }}>
+            {resolvedCount} / {totalCount}
+          </span>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Resolved Defects</div>
+        </div>
+      </div>
+
+      {/* Breakdown by Severity */}
+      <div style={{ fontSize: '0.74rem', fontWeight: '700', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+        MTTR by Severity Tier
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
+        {severityOrder.map((s) => {
+          const item = data[s.key] || { formatted: 'N/A', count: 0 };
+          return (
+            <div key={s.key} style={{ padding: '0.4rem 0.55rem', background: 'var(--bg-dark-accent)', borderRadius: '6px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.74rem', fontWeight: '700', color: s.color }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: s.color }} />
+                  {s.label}
+                </span>
+                <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>({item.count})</span>
+              </div>
+              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text)' }}>
+                {item.formatted}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -583,11 +817,7 @@ export default function Dashboard() {
         {/* Top Navigation Bar */}
         <header className="top-navbar">
           <div className="top-navbar-actions">
-            {/* Agent Watermark Badge */}
-            <div className="agent-watermark-badge">
-              <Bot size={14} color="var(--accent)" />
-              <span>AGENT SYNTHESIZED UI</span>
-            </div>
+
 
             <button className="btn btn-primary btn-sm" onClick={() => setShowNewIssue(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
               <Plus size={14} /> Report Bug
@@ -605,42 +835,122 @@ export default function Dashboard() {
           {/* TAB 1: DASHBOARD */}
           {navTab === 'dashboard' && stats && (
             <div>
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <span className="stat-number">{stats.summary.total_bugs}</span>
-                  <span className="stat-label">Total Bugs</span>
+              {/* Dashboard Banner Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.4rem', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: 'var(--display)' }}>
+                    <BarChart3 size={22} color="var(--accent)" /> QA Analytics & Defect Dashboard
+                  </h2>
+                  <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                    Project: <strong style={{ color: 'var(--text)' }}>{selectedProject ? selectedProject.name : 'All Projects'}</strong> • Real-time defect intelligence, resolution velocity, and engineer workloads.
+                  </p>
                 </div>
-                <div className="stat-card">
-                  <span className="stat-number">{stats.summary.open_bugs}</span>
-                  <span className="stat-label">Open Bugs</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-number">{stats.summary.in_progress_bugs}</span>
-                  <span className="stat-label">In Progress</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-number">{stats.summary.resolved_bugs}</span>
-                  <span className="stat-label">Resolved / Closed</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-number" style={{ color: 'var(--danger)' }}>
-                    {stats.summary.critical_bugs}
-                  </span>
-                  <span className="stat-label">Critical Defects</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-number" style={{ color: 'var(--accent)' }}>
-                    {stats.summary.assigned_bugs}
-                  </span>
-                  <span className="stat-label">Assigned to Me</span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleDownloadProjectPdf}
+                    disabled={downloadingProjectPdf || !selectedProject}
+                    title="Download Project QA Defect Report as PDF"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <FileDown size={14} />
+                    {downloadingProjectPdf ? 'Generating PDF...' : 'Download Project PDF'}
+                  </button>
                 </div>
               </div>
 
+              {/* 8 Metric Summary KPI Cards */}
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-card-header">
+                    <span className="stat-label">Total Defects</span>
+                    <Bug size={16} color="var(--accent)" />
+                  </div>
+                  <span className="stat-number">{stats.summary.total_bugs}</span>
+                  <span className="stat-subtext">All logged defects</span>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-card-header">
+                    <span className="stat-label">Open Defects</span>
+                    <AlertCircle size={16} color="#3b82f6" />
+                  </div>
+                  <span className="stat-number" style={{ color: '#3b82f6' }}>{stats.summary.open_bugs}</span>
+                  <span className="stat-subtext">Awaiting triage</span>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-card-header">
+                    <span className="stat-label">In Progress / Review</span>
+                    <Activity size={16} color="#0284c7" />
+                  </div>
+                  <span className="stat-number" style={{ color: '#0284c7' }}>
+                    {(stats.summary.in_progress_bugs || 0) + (stats.summary.in_review_bugs || 0)}
+                  </span>
+                  <span className="stat-subtext">Active development</span>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-card-header">
+                    <span className="stat-label">Resolved Defects</span>
+                    <CheckCircle2 size={16} color="#10b981" />
+                  </div>
+                  <span className="stat-number" style={{ color: '#10b981' }}>{stats.summary.resolved_bugs}</span>
+                  <span className="stat-subtext">Fixed by developers</span>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-card-header">
+                    <span className="stat-label">Closed Defects</span>
+                    <CheckCircle size={16} color="#64748b" />
+                  </div>
+                  <span className="stat-number" style={{ color: '#64748b' }}>{stats.summary.closed_bugs}</span>
+                  <span className="stat-subtext">QA verified & closed</span>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-card-header">
+                    <span className="stat-label">Avg Resolution Time</span>
+                    <Clock size={16} color="var(--accent)" />
+                  </div>
+                  <span className="stat-number" style={{ color: 'var(--accent)', fontSize: '1.45rem' }}>
+                    {stats.summary.avg_resolution_time_formatted || 'N/A'}
+                  </span>
+                  <span className="stat-subtext">{stats.summary.resolution_rate}% resolution rate</span>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-card-header">
+                    <span className="stat-label">Critical Defects</span>
+                    <Flame size={16} color="#ef4444" />
+                  </div>
+                  <span className="stat-number" style={{ color: '#ef4444' }}>
+                    {stats.summary.critical_bugs}
+                  </span>
+                  <span className="stat-subtext">Requires immediate fix</span>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-card-header">
+                    <span className="stat-label">Assigned to Me</span>
+                    <Target size={16} color="var(--accent)" />
+                  </div>
+                  <span className="stat-number" style={{ color: 'var(--accent)' }}>
+                    {stats.summary.assigned_bugs}
+                  </span>
+                  <span className="stat-subtext">My active queue</span>
+                </div>
+              </div>
+
+              {/* 6 Analytics Chart Grid */}
               <div className="charts-grid">
+                <DefectTrendsChart data={stats.charts.monthly_reports} />
+                <CategoryChart data={stats.charts.by_category} />
                 <SeverityChart data={stats.charts.by_severity} />
                 <StatusChart data={stats.charts.by_status} />
-                <MonthlyChart data={stats.charts.monthly_reports} />
                 <WorkloadChart data={stats.charts.developer_workload} />
+                <ResolutionTimeChart summary={stats.summary} data={stats.charts.resolution_by_severity} />
               </div>
 
               <div className="recent-activity-section card" style={{ marginTop: '1.5rem' }}>

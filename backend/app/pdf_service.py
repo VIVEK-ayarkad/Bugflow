@@ -1,9 +1,11 @@
-import io
 import datetime
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, KeepTogether
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+import io
+
 from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 from app.models import Issue, Project
 
 
@@ -187,7 +189,7 @@ def generate_issue_pdf(issue: Issue) -> bytes:
     # 7. Resolution Assistance (AI Intelligence)
     elements.append(Paragraph("<b>Resolution Assistance</b>", styles["section"]))
     elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceBefore=2, spaceAfter=8))
-    
+
     combined = f"{issue.title} {issue.description or ''} {issue.category or ''}".lower()
     if any(k in combined for k in ["pay", "checkout", "stripe", "billing", "cart", "purchase", "submit"]):
         inv = [
@@ -233,7 +235,7 @@ def generate_issue_pdf(issue: Issue) -> bytes:
         elements.append(Paragraph(f"<b>Activity & Comments ({len(issue.comments)})</b>", styles["section"]))
         elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceBefore=2, spaceAfter=8))
         for c in issue.comments:
-            author = c.author.username if c.author else "System"
+            author = c.user.username if c.user else "System"
             c_date = c.created_at.strftime("%Y-%m-%d %H:%M") if c.created_at else ""
             elements.append(Paragraph(f"<b>{author}</b> ({c_date}): {c.content}", styles["body"]))
             elements.append(Spacer(1, 3))
@@ -282,7 +284,6 @@ def generate_project_summary_pdf(project: Project, issues: list[Issue]) -> bytes
     rev_count = sum(1 for i in issues if getattr(i.status, 'value', str(i.status)).lower() == 'in_review')
     res_count = sum(1 for i in issues if getattr(i.status, 'value', str(i.status)).lower() in ['resolved', 'closed'])
     crit_count = sum(1 for i in issues if getattr(i.severity, 'value', str(i.severity)).lower() == 'critical')
-    high_count = sum(1 for i in issues if getattr(i.severity, 'value', str(i.severity)).lower() == 'high')
 
     # 3. Metrics Summary Grid
     metrics_data = [
@@ -337,7 +338,7 @@ def generate_project_summary_pdf(project: Project, issues: list[Issue]) -> bytes
         pri_str = getattr(i.priority, 'value', str(i.priority)).upper()
         stat_str = getattr(i.status, 'value', str(i.status)).upper()
         assignee_str = i.assigned_developer.username if i.assigned_developer else "Unassigned"
-        
+
         table_data.append([
             Paragraph(f"<b>DEF-{i.id}</b>", ParagraphStyle("KeyCell", fontName="Helvetica-Bold", fontSize=8, textColor=colors.HexColor("#2563eb"))),
             Paragraph(i.title[:38] + ("..." if len(i.title) > 38 else ""), ParagraphStyle("TitleCell", fontName="Helvetica", fontSize=8)),

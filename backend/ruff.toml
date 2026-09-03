@@ -1,0 +1,14 @@
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # Line length handled by formatter
+    "B008",  # FastAPI Depends/Query in function parameter defaults
+    "E701",  # Multiple statements on one line (colon)
+    "E402",  # Module level import not at top of file (for sys.path test scripts)
+]
+
+[lint.isort]
+known-first-party = ["app"]

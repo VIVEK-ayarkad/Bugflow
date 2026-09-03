@@ -817,12 +817,26 @@ label {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-  margin-top: 0.35rem;
+  margin-top: 0.15rem;
+}
+
+.stat-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.stat-subtext {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-weight: 500;
+  margin-top: 0.3rem;
 }
 
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 1rem;
 }
 

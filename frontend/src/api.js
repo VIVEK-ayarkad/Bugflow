@@ -365,4 +365,23 @@ export async function downloadProjectPdf(projectId, projectName = 'project') {
   window.URL.revokeObjectURL(url);
 }
 
+export async function downloadAttachmentFile(attachmentId, filename = 'attachment') {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/attachments/${attachmentId}/download`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to download attachment');
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export { getToken };

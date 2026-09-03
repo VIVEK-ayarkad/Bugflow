@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, BellCheck, CheckCheck } from 'lucide-react';
+import { X, CheckCheck } from 'lucide-react';
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from '../api';
 
 export default function NotificationDrawer({ isOpen, onClose }) {
