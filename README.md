@@ -4,17 +4,19 @@
   <img src="https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
   <img src="https://img.shields.io/badge/React-18.3+-61DAFB.svg?style=for-the-badge&logo=react&logoColor=black" alt="React" />
   <img src="https://img.shields.io/badge/PostgreSQL-15+-4169E1.svg?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
-  <img src="https://img.shields.io/badge/ReportLab-PDF_Engine-E11D48.svg?style=for-the-badge&logo=adobeacrobatreader&logoColor=white" alt="ReportLab" />
-  <img src="https://img.shields.io/badge/Python-3.12%20|%203.14-3776AB.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED.svg?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Pytest-60_Passed-0A9EDC.svg?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest" />
+  <img src="https://img.shields.io/badge/Ruff-Linted-D7FF64.svg?style=for-the-badge&logo=ruff&logoColor=black" alt="Ruff" />
+  <img src="https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF.svg?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions" />
 </p>
 
 ---
 
 ## 📌 Overview
 
-**BugFlow** is an enterprise-grade defect tracking and software QA intelligence platform designed for modern engineering teams. It unites a high-throughput **FastAPI** backend, **PostgreSQL** relational persistence, a responsive **React 18** client, **ReportLab** PDF generation, and **Dense Semantic Vector Intelligence** to streamline the complete bug lifecycle.
+**BugFlow** is an enterprise-grade defect tracking and software QA intelligence platform designed for modern agile engineering teams. It unites a high-throughput **FastAPI** backend, **PostgreSQL** relational persistence, a responsive **React 18** client, **ReportLab** PDF generation, **Dense Semantic Vector Intelligence**, and automated **CI/CD pipeline workflows** to streamline the complete bug lifecycle.
 
-From automated defect classification and semantic duplicate detection to our signature **Resolution Assistance Copilot**, BugFlow empowers testers to file crystal-clear bug reports and enables developers to diagnose and resolve issues in record time.
+From automated defect classification and semantic duplicate detection to our signature **Resolution Assistance Copilot**, BugFlow empowers QA testers to file crystal-clear bug reports and enables developers to diagnose and resolve issues in record time.
 
 ---
 
@@ -36,7 +38,7 @@ From automated defect classification and semantic duplicate detection to our sig
   * `Actual Result:`
   * `Impact & Severity Assessment:`
 
-### 3. 🎯 Intelligent Severity & Priority Assistance
+### 3. 🎯 Intelligent Severity & Outage Predictor
 * **Impact Evaluation:** Scores business risk and outage severity *(e.g., "All users unable to complete checkout" → Critical)*.
 * **Compliance & Transparency:** Displays explicit disclaimers ensuring final decision authority remains with authorized project leads.
 
@@ -61,10 +63,10 @@ From automated defect classification and semantic duplicate detection to our sig
 * **AST Validation:** Confirms valid code with `is_correct: true`.
 
 ### 8. 📄 1-Click PDF Report Generation
-* **Defect Investigation Reports:** Export complete bug metadata, reproduction steps, resolution assistance, and full comment thread as a PDF.
-* **Project QA Summary Reports:** Executive PDF summarizing project statistics, open defect inventories, and severity charts.
+* **Defect Investigation Reports:** Export complete bug metadata, reproduction steps, resolution assistance, and full comment thread as a PDF (`GET /api/issues/{id}/pdf`).
+* **Project QA Summary Reports:** Executive PDF summarizing project statistics, open defect inventories, and severity charts (`GET /api/projects/{id}/pdf`).
 
-### 9. ✏️ Full Defect Lifecycle & Editing
+### 9. ✏️ Full Defect Lifecycle & In-Place Editing
 * Modify and update defects directly from:
   * **Bug Detail Modal:** Inline **"✏️ Edit Bug"** toggle.
   * **Table View:** Dedicated **"✏️ Edit"** button in row actions.
@@ -76,7 +78,7 @@ From automated defect classification and semantic duplicate detection to our sig
   * Change **Security Password** (with current password verification).
   * View assigned role badge and membership duration.
 
-### 11. 📊 Project Sprints & Interactive Kanban Board
+### 11. 📊 Sprints, Interactive Kanban Board & Analytics
 * **5-Stage Kanban Workflow:** `Open` ➔ `In Progress` ➔ `In Review` ➔ `Resolved` ➔ `Closed`.
 * **Sprint Health Analytics:** Automatic sprint risk scoring (`Low`, `Medium`, `High`, `Critical`).
 * **Visual Charts:** Interactive SVG charts for severity distributions, status breakdowns, monthly defect volume, and team workload.
@@ -93,7 +95,7 @@ From automated defect classification and semantic duplicate detection to our sig
                                │  REST API / JWT
 ┌──────────────────────────────▼──────────────────────────────┐
 │                    FastAPI Backend Engine                   │
-│   (Python 3.14 • Pydantic v2 • SQLAlchemy 2.0 • ReportLab)  │
+│   (Python 3.12+ • Pydantic v2 • SQLAlchemy 2.0 • ReportLab) │
 └──────┬───────────────────────┬───────────────────────┬──────┘
        │                       │                       │
 ┌──────▼──────┐         ┌──────▼──────┐         ┌──────▼──────┐
@@ -105,25 +107,45 @@ From automated defect classification and semantic duplicate detection to our sig
 | Layer | Technologies & Tools |
 | :--- | :--- |
 | **Frontend** | React 18, Vite, Vanilla CSS, Lucide React, Context API |
-| **Backend API** | FastAPI, Pydantic v2, Python 3.12 / 3.14 |
-| **Database** | PostgreSQL, SQLAlchemy 2.0 ORM |
+| **Backend API** | FastAPI, Pydantic v2, Python 3.12 / 3.13 |
+| **Database** | PostgreSQL 15+, SQLite (test/dev), SQLAlchemy 2.0 ORM |
 | **AI Intelligence** | Dense Concept Vector Ontology, OpenAI Embeddings, GPT-4o-mini |
 | **PDF Generation** | ReportLab Document Engine |
 | **Authentication** | Passlib (bcrypt), PyJWT (HS256), Role-Based Access Control (RBAC) |
+| **Testing & CI** | Pytest, Ruff Linter, GitHub Actions CI/CD Pipeline |
+| **Containerization** | Docker, Multi-Stage Builds, Nginx Reverse Proxy, Docker Compose |
 
 ---
 
 ## 🚦 Quick Start Guide
 
-### Prerequisites
+### Option 1: Run with Docker Compose (Recommended)
+
+Start the full stack (PostgreSQL + FastAPI Backend + React/Nginx Frontend) in one command:
+
+```bash
+# Clone the repository
+git clone https://github.com/VIVEK-ayarkad/Bugflow.git
+cd Bugflow
+
+# Start all services
+docker compose up --build
+```
+
+- 🌐 **Frontend Web UI:** [http://localhost:5173](http://localhost:5173)
+- 🚀 **Backend API:** [http://localhost:8000](http://localhost:8000)
+- 📚 **Swagger API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+
+---
+
+### Option 2: Local Development Setup
+
+#### Prerequisites
 * **Python 3.12+**
 * **Node.js 18+** & **npm**
 * **PostgreSQL** (or SQLite for local rapid dev)
 
----
-
-### 1. Backend Setup
-
+#### 1. Backend Setup
 ```bash
 # Navigate to backend directory
 cd backend
@@ -143,10 +165,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 > 📚 **Interactive Swagger API Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
----
-
-### 2. Frontend Setup
-
+#### 2. Frontend Setup
 ```bash
 # Navigate to frontend directory
 cd frontend
@@ -161,6 +180,47 @@ npm run dev
 
 ---
 
+## 🧪 Testing & Code Quality
+
+BugFlow includes a comprehensive automated test suite and linter configuration:
+
+```bash
+cd backend
+
+# 1. Run full unit & integration test suite (60 Tests)
+./venv/bin/pytest
+
+# 2. Run standalone 51-point REST API verification suite (7 Phases)
+./venv/bin/python test_api_suite.py
+
+# 3. Run Ruff code linter
+./venv/bin/ruff check .
+
+# 4. Verify Frontend Production Build
+cd ../frontend
+npm run build
+```
+
+---
+
+## 🔄 CI/CD Pipeline (GitHub Actions)
+
+The repository includes automated CI/CD workflows under [`.github/workflows/`](.github/workflows/):
+
+```mermaid
+graph LR
+    A["1. Validate & Lint<br/>(Ruff + Syntax + Audit)"] --> B["2. Backend Tests<br/>(PyTest on Py3.12 & 3.13)"]
+    A --> C["3. Frontend Build<br/>(Vite Production Dist)"]
+    B --> D["4. Container Builds<br/>(Docker Images)"]
+    C --> D
+    D --> E["5. Continuous Deployment<br/>(Staging / Production)"]
+```
+
+1. **`ci.yml`**: Triggers on every push & pull request to `main`/`master`/`develop`. Executes code validation, multi-version test matrices, frontend production builds, container builds, and deployment verification.
+2. **`deploy.yml`**: Dispatches target environment deployments to staging or production with container registry publishing (`ghcr.io`).
+
+---
+
 ## ⚙️ Environment Configuration
 
 Create a `.env` file inside `backend/`:
@@ -169,9 +229,10 @@ Create a `.env` file inside `backend/`:
 # Database Connection
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/bugflow_db
 
-# Security & Tokens
+# Security & JWT Tokens
 SECRET_KEY=your-super-secret-jwt-key-change-in-production
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
+ALGORITHM=HS256
 
 # AI Configuration (Optional — built-in dense vector math works offline)
 OPENAI_API_KEY=your_openai_api_key_here
@@ -193,10 +254,12 @@ OPENAI_MODEL=gpt-4o-mini
 | `PUT` | `/api/issues/{id}` | Update defect details & workflow status |
 | `GET` | `/api/issues/{id}/pdf` | Stream individual defect PDF report |
 | `GET` | `/api/projects/{id}/pdf` | Stream complete project summary PDF |
+| `GET` | `/api/attachments/{id}/download` | Authenticated attachment file stream |
 | `POST` | `/api/ai/classify-defect` | Suggest Category, Module, Type, Severity |
 | `POST` | `/api/ai/semantic-search` | Conceptual vector similarity search |
 | `GET` | `/api/issues/{id}/resolution-assistance` | Generate checklist, similar bugs & fix |
 | `POST` | `/api/ai/fix-code` | Code Doctor direct syntax & semantic repair |
+| `POST` | `/api/ai/sprint-health/{id}` | Predict sprint delivery health & risk score |
 
 ---
 
