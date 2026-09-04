@@ -149,6 +149,8 @@ app.add_middleware(
 # Mount static file directory for attachments
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+from fastapi.responses import RedirectResponse
+
 # Register Routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
@@ -173,3 +175,22 @@ app.include_router(ai.router, prefix="/api")
 def health():
     """Service health and uptime endpoint."""
     return HealthResponse(status="ok", app="BugFlow API", version="1.0.0")
+
+
+@app.get("/api/docs", include_in_schema=False)
+def redirect_api_docs():
+    """Convenience redirect for /api/docs -> /docs."""
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/api/redoc", include_in_schema=False)
+def redirect_api_redoc():
+    """Convenience redirect for /api/redoc -> /redoc."""
+    return RedirectResponse(url="/redoc")
+
+
+@app.get("/", include_in_schema=False)
+def redirect_root():
+    """Convenience redirect for root / -> /docs."""
+    return RedirectResponse(url="/docs")
+

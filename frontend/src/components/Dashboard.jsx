@@ -60,6 +60,7 @@ import NotificationDrawer from './NotificationDrawer';
 import ProfileModal from './ProfileModal';
 import SprintManager from './SprintManager';
 import ThemeToggle from './ThemeToggle';
+import AIChatbot from './AIChatbot';
 
 function Badge({ value }) {
   const v = value || 'open';
@@ -560,6 +561,11 @@ export default function Dashboard() {
   const [allUsers, setAllUsers] = useState([]);
   const [selectedAddUserId, setSelectedAddUserId] = useState('');
   const [notifOpen, setNotifOpen] = useState(false);
+  const [aiChatContext, setAiChatContext] = useState(null);
+
+  function handleOpenAIChat(ctx = null) {
+    setAiChatContext(ctx);
+  }
 
   // Form State
   const [newProjectName, setNewProjectName] = useState('');
@@ -785,6 +791,9 @@ export default function Dashboard() {
           <button className={`nav-item ${navTab === 'ai_tools' ? 'active' : ''}`} onClick={() => setNavTab('ai_tools')}>
             <Sparkles size={16} /> Code Doctor & AI
           </button>
+          <button className={`nav-item ${navTab === 'chatbot' ? 'active' : ''}`} onClick={() => setNavTab('chatbot')}>
+            <Bot size={16} /> AI Mentor & Chatbot
+          </button>
 
           {isAdmin && (
             <button className={`nav-item ${navTab === 'admin' ? 'active' : ''}`} onClick={() => setNavTab('admin')}>
@@ -817,7 +826,14 @@ export default function Dashboard() {
         {/* Top Navigation Bar */}
         <header className="top-navbar">
           <div className="top-navbar-actions">
-
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setNavTab('chatbot')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+              title="Open AI Mentor & Bug Q&A"
+            >
+              <Bot size={14} color="var(--accent)" /> AI Mentor
+            </button>
 
             <button className="btn btn-primary btn-sm" onClick={() => setShowNewIssue(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
               <Plus size={14} /> Report Bug
@@ -1336,7 +1352,14 @@ export default function Dashboard() {
           {/* TAB 5: AI CODE DOCTOR */}
           {navTab === 'ai_tools' && <CodeDoctor projects={projects} onIssueCreated={loadIssuesAndStats} />}
 
-          {/* TAB 6: ADMIN PANEL */}
+          {/* TAB 6: AI MENTOR & CHATBOT WORKSTATION */}
+          {navTab === 'chatbot' && (
+            <div style={{ height: 'calc(100vh - 120px)' }}>
+              <AIChatbot mode="fullscreen" initialContext={aiChatContext} />
+            </div>
+          )}
+
+          {/* TAB 7: ADMIN PANEL */}
           {navTab === 'admin' && isAdmin && <AdminPanel />}
         </div>
       </main>
@@ -1351,6 +1374,7 @@ export default function Dashboard() {
               onSubmit={handleCreateIssueSubmit}
               onCancel={() => setShowNewIssue(false)}
               submitLabel="Submit Bug Report"
+              onOpenAIChat={handleOpenAIChat}
             />
           </div>
         </div>
@@ -1373,6 +1397,7 @@ export default function Dashboard() {
               onSubmit={handleUpdateIssueSubmit}
               onCancel={() => setEditingIssue(null)}
               submitLabel="Save Changes"
+              onOpenAIChat={handleOpenAIChat}
             />
           </div>
         </div>
@@ -1460,6 +1485,7 @@ export default function Dashboard() {
           issue={selectedIssue}
           onClose={() => setSelectedIssue(null)}
           onRefresh={loadIssuesAndStats}
+          onOpenAIChat={handleOpenAIChat}
         />
       )}
 
@@ -1468,6 +1494,11 @@ export default function Dashboard() {
       )}
 
       <NotificationDrawer isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
+
+      {/* Global Floating AI Mentor Widget */}
+      {navTab !== 'chatbot' && (
+        <AIChatbot mode="widget" initialContext={aiChatContext} />
+      )}
     </div>
   );
 }

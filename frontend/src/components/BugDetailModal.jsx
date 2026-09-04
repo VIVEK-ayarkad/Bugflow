@@ -17,6 +17,7 @@ import {
   BookOpen,
   MessageSquare,
   History,
+  Bot,
 } from 'lucide-react';
 import {
   addComment,
@@ -46,7 +47,7 @@ const WORKFLOW_STEPS = [
   { id: 'closed', label: 'Closed' },
 ];
 
-export default function BugDetailModal({ issue, onClose, onRefresh }) {
+export default function BugDetailModal({ issue, onClose, onRefresh, onOpenAIChat = null }) {
   const { user, hasRole } = useAuth();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'comments' | 'attachments'
   const [currentIssue, setCurrentIssue] = useState(issue);
@@ -304,6 +305,26 @@ export default function BugDetailModal({ issue, onClose, onRefresh }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {onOpenAIChat && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() =>
+                  onOpenAIChat({
+                    issue_id: currentIssue.id,
+                    issue_title: currentIssue.title,
+                    issue_description: currentIssue.description,
+                    category: currentIssue.category,
+                    module: currentIssue.module,
+                    severity: currentIssue.severity,
+                    status: currentIssue.status,
+                  })
+                }
+                title="Ask AI Mentor how to diagnose, reproduce, or resolve this bug"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--accent-light)', borderColor: 'var(--accent)', color: 'var(--accent)' }}
+              >
+                <Bot size={14} /> Ask AI Mentor
+              </button>
+            )}
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => setIsEditing(!isEditing)}

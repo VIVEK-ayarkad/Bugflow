@@ -6,7 +6,9 @@ from app.ai import (
     classify_defect,
     detect_duplicates,
     fix_code_snippet,
+    generate_chat_response,
     generate_resolution_assistance,
+    get_chat_starter_topics,
     predict_severity,
     predict_sprint_health,
     semantic_search_defects,
@@ -18,6 +20,9 @@ from app.models import User
 from app.schemas import (
     AIAssistRequest,
     AIAssistResponse,
+    AIChatRequest,
+    AIChatResponse,
+    AIChatTopicsResponse,
     CodeFixRequest,
     CodeFixResponse,
     DefectClassifyRequest,
@@ -190,3 +195,40 @@ async def ai_resolution_assistance(
 ):
     """Generate resolution assistance for a defect."""
     return await generate_resolution_assistance(request, db)
+
+
+@router.post(
+    "/chat",
+    response_model=AIChatResponse,
+    summary="AI QA & Developer Mentor Chatbot",
+    description="Interactive conversational chatbot to answer beginner questions on reporting, diagnosing, reproducing, and solving bugs.",
+    responses={
+        200: {"description": "Conversational assistant response", "model": AIChatResponse},
+        401: {"description": "Unauthorized access", "model": ErrorResponse},
+        422: {"description": "Validation error", "model": ErrorResponse},
+    },
+)
+async def ai_chat_mentor(
+    request: AIChatRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Interact with the AI QA & Developer Mentor."""
+    return await generate_chat_response(request)
+
+
+@router.get(
+    "/chat/topics",
+    response_model=AIChatTopicsResponse,
+    summary="AI Chatbot Starter Topics & Beginner Questions",
+    description="Fetch categorized starter topics, prompt pills, and beginner guide topics.",
+    responses={
+        200: {"description": "Curated topic categories returned", "model": AIChatTopicsResponse},
+        401: {"description": "Unauthorized access", "model": ErrorResponse},
+    },
+)
+def ai_chat_topics(
+    current_user: User = Depends(get_current_user),
+):
+    """Get curated starter topics and prompt questions for beginners."""
+    return get_chat_starter_topics()
+

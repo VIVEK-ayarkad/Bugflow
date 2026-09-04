@@ -36,6 +36,7 @@ export default function IssueForm({
   onCancel,
   submitLabel = 'Save Issue',
   projectId = null,
+  onOpenAIChat = null,
 }) {
   const [form, setForm] = useState({ ...EMPTY, ...initial });
   const [rawInput, setRawInput] = useState('');
@@ -78,87 +79,10 @@ export default function IssueForm({
     }
   }
 
-  const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
-
-  const handleClassify = async (descToUse, titleToUse) => {
-    const d = descToUse !== undefined ? descToUse : (form.description.trim() || rawInput.trim());
-    const t = titleToUse !== undefined ? titleToUse : form.title.trim();
-    if (!d && !t) return;
-
-    setClassifying(true);
-    try {
-      const res = await aiClassifyDefect(d, t);
-      setClassification(res);
-      setSuggestionAccepted(false);
-    } catch {
-      // silent ignore
-    } finally {
-      setClassifying(false);
-    }
-  };
-
-  const acceptSuggestion = () => {
-    if (!classification) return;
-    setForm((f) => ({
-      ...f,
-      category: classification.category || f.category,
-      module: classification.module || f.module,
-      defect_type: classification.defect_type || f.defect_type,
-      severity: classification.suggested_severity || f.severity,
-      priority: classification.suggested_priority || f.priority,
-    }));
-    setSeverityRationale(classification.rationale);
-    setSuggestionAccepted(true);
-  };
-
-  const autoPredictSeverity = async (titleToUse, descToUse) => {
-    const t = titleToUse !== undefined ? titleToUse : form.title;
-    const d = descToUse !== undefined ? descToUse : form.description;
-    if (!t.trim() && !d.trim()) return;
-
-    setSeverityPredicting(true);
-    try {
-      const res = await aiPredictSeverity(t, d);
-      if (res.predicted_severity) {
-        setForm((f) => ({
-          ...f,
-          severity: res.predicted_severity,
-          priority: res.predicted_priority || f.priority,
-        }));
-        setSeverityRationale(res.rationale);
-      }
-    } catch {
-      // silent ignore
-    } finally {
-      setSeverityPredicting(false);
-    }
-  };
-
-  const handleDetectDuplicates = async (titleToUse, descToUse) => {
-    if (!projectId) return;
-    const t = titleToUse !== undefined ? titleToUse : (form.title.trim() || rawInput.trim());
-    const d = descToUse !== undefined ? descToUse : form.description.trim();
-    if (!t && !d) return;
-
-    setDetectingDuplicates(true);
-    try {
-      const res = await aiDetectDuplicates(projectId, t, d);
-      setDuplicates(res.potential_duplicates || []);
-    } catch {
-      setDuplicates([]);
-    } finally {
-      setDetectingDuplicates(false);
-    }
-  };
-
   const toggleVoiceDictation = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      const sampleVoiceText = "User receives 500 internal server error when updating billing address on chrome desktop.";
-      setRawInput(sampleVoiceText);
-      handleAiAssist(sampleVoiceText);
-      handleClassify(sampleVoiceText);
-      handleDetectDuplicates(sampleVoiceText, "");
+      alert('Voice dictation is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
       return;
     }
 
@@ -171,19 +95,23 @@ export default function IssueForm({
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
       recognition.interimResults = false;
+      recognition.lang = 'en-US';
 
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
-      recognition.onerror = () => setIsListening(false);
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
-        if (transcript) {
-          setRawInput(transcript);
-          handleAiAssist(transcript);
-          handleClassify(transcript);
-          handleDetectDuplicates(transcript, "");
-        }
+        setRawInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
       };
 
       recognition.start();
@@ -192,11 +120,77 @@ export default function IssueForm({
     }
   };
 
-  const handleAiAssist = async (inputOverride) => {
-    const textToUse = typeof inputOverride === 'string' ? inputOverride : (rawInput.trim() || form.description.trim());
-    if (!textToUse) return;
+  const handleClassify = async (desc, title = '') => {
+    if (!desc && !title) return;
+    setClassifying(true);
+    try {
+      const res = await aiClassifyDefect({ description: desc, title: title });
+      setClassification(res);
+      setForm((f) => ({
+        ...f,
+        category: res.category || f.category,
+        module: res.module || f.module,
+        defect_type: res.defect_type || f.defect_type,
+        severity: res.suggested_severity || f.severity,
+        priority: res.suggested_priority || f.priority,
+      }));
+    } catch {
+      // Non-critical, fallback will trigger if needed
+    } finally {
+      setClassifying(false);
+    }
+  };
+
+  const autoPredictSeverity = async (title, desc) => {
+    const combined = `${title || ''} ${desc || ''}`.trim();
+    if (!combined) return;
+    setSeverityPredicting(true);
+    try {
+      const res = await aiPredictSeverity({ description: combined });
+      if (res && res.predicted_severity) {
+        setForm((f) => ({
+          ...f,
+          severity: res.predicted_severity,
+          priority: res.predicted_priority || f.priority,
+        }));
+        setSeverityRationale(res.rationale || '');
+      }
+    } catch {
+      // Non-critical background prediction
+    } finally {
+      setSeverityPredicting(false);
+    }
+  };
+
+  const handleDetectDuplicates = async (title, desc) => {
+    if (!projectId || (!title && !desc)) return;
+    setDetectingDuplicates(true);
+    try {
+      const res = await aiDetectDuplicates({
+        project_id: projectId,
+        title: title || form.title || 'Untitled Defect',
+        description: desc || form.description || '',
+      });
+      if (res && res.has_duplicates) {
+        setDuplicates(res.potential_duplicates || []);
+      } else {
+        setDuplicates([]);
+      }
+    } catch {
+      setDuplicates([]);
+    } finally {
+      setDetectingDuplicates(false);
+    }
+  };
+
+  const handleAssist = async (customPrompt = null) => {
+    const textToUse = customPrompt || rawInput;
+    if (!textToUse.trim()) return;
+
     setAiLoading(true);
-    setAiResult(null);
+    setError('');
+    setSuggestionAccepted(false);
+
     try {
       const result = await aiAssist(textToUse);
       setAiResult(result);
@@ -242,19 +236,38 @@ export default function IssueForm({
   return (
     <form onSubmit={handleSubmit} className="issue-form">
       <div className="ai-panel">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
             <Sparkles size={16} /> AI Copilot & Voice Dictation
           </h3>
-          <button
-            type="button"
-            className={`voice-record-btn ${isListening ? 'recording' : ''}`}
-            onClick={toggleVoiceDictation}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-          >
-            <Mic size={14} />
-            {isListening ? 'Listening…' : 'Voice Bug Report'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+            {onOpenAIChat && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() =>
+                  onOpenAIChat({
+                    draft_title: form.title || rawInput,
+                    draft_description: form.description || rawInput,
+                    project_id: projectId,
+                  })
+                }
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem' }}
+                title="Ask AI Mentor for advice on writing this bug report"
+              >
+                <Bot size={13} color="var(--accent)" /> Ask AI Mentor
+              </button>
+            )}
+            <button
+              type="button"
+              className={`voice-record-btn ${isListening ? 'recording' : ''}`}
+              onClick={toggleVoiceDictation}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <Mic size={14} />
+              {isListening ? 'Listening…' : 'Voice Bug Report'}
+            </button>
+          </div>
         </div>
 
         <p style={{ fontSize: '0.83rem', color: 'var(--text-muted)', marginTop: '0.4rem', marginBottom: '0.5rem' }}>

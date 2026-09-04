@@ -286,6 +286,38 @@ def test_api_suite():
     }, headers=admin_headers)
     assert_test(sem_res.status_code == 200 and "results" in sem_res.json(), "POST /api/ai/semantic-search (concept similarity)")
 
+    # ── AI Chatbot & Mentor Tests ────────────────────────────────────────────
+    chat_topics_res = client.get("/api/ai/chat/topics", headers=admin_headers)
+    assert_test(chat_topics_res.status_code == 200 and len(chat_topics_res.json().get("categories", [])) >= 3, "GET /api/ai/chat/topics (beginner categories)")
+
+    chat_res = client.post("/api/ai/chat", json={
+        "messages": [
+            {"role": "user", "content": "How do I write a good bug report?"}
+        ],
+        "mode": "general_mentor"
+    }, headers=admin_headers)
+    assert_test(chat_res.status_code == 200 and len(chat_res.json().get("reply", "")) > 50, "POST /api/ai/chat (general beginner mentoring)")
+
+    chat_review_res = client.post("/api/ai/chat", json={
+        "messages": [
+            {"role": "user", "content": "Review my draft bug report: payment button crashes"}
+        ],
+        "mode": "draft_reviewer",
+        "context": {
+            "draft_title": "payment button crashes",
+            "draft_description": "User clicks checkout submit and nothing happens."
+        }
+    }, headers=admin_headers)
+    assert_test(chat_review_res.status_code == 200 and "Review" in chat_review_res.json().get("reply", ""), "POST /api/ai/chat (draft bug review mode)")
+
+    chat_err_res = client.post("/api/ai/chat", json={
+        "messages": [
+            {"role": "user", "content": "Explain 500 internal server error"}
+        ],
+        "mode": "error_explainer"
+    }, headers=admin_headers)
+    assert_test(chat_err_res.status_code == 200 and "500" in chat_err_res.json().get("reply", ""), "POST /api/ai/chat (error explanation mode)")
+
     print("\n=======================================================")
     print(f"📊 Verification Summary: {passed} PASSED, {failed} FAILED")
     print("=======================================================")
@@ -295,3 +327,4 @@ def test_api_suite():
 
 if __name__ == "__main__":
     test_api_suite()
+

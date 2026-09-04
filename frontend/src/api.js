@@ -325,6 +325,18 @@ export async function getResolutionAssistance(issueId, payload = null) {
   });
 }
 
+export async function sendAIChat(payload) {
+  return request('/ai/chat', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAIChatTopics() {
+  return request('/ai/chat/topics');
+}
+
+
 // ── PDF Export Downloads ──────────────────────────────────────────────────────
 
 export async function downloadIssuePdf(issueId) {

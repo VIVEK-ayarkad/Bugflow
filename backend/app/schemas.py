@@ -448,3 +448,53 @@ class AdminMetrics(BaseModel):
 class AdminReportsResponse(BaseModel):
     system_metrics: AdminMetrics
     users_by_role: dict[str, int] = Field(..., description="Distribution of users across system roles")
+
+
+# ── AI Chatbot & Beginner Mentor ─────────────────────────────────────────────
+
+class ChatMessage(BaseModel):
+    role: str = Field(..., description="Message author role: 'user', 'assistant', or 'system'", examples=["user"])
+    content: str = Field(..., description="Message text content", examples=["How do I write a good bug report?"])
+    timestamp: str | None = Field(default=None, description="Optional ISO timestamp string")
+
+
+class AIChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(..., min_length=1, description="Chronological conversation message history")
+    context: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional active context such as issue_id, issue_title, issue_description, project_name, current_code, error_log",
+    )
+    mode: str | None = Field(
+        default="general_mentor",
+        description="Operational mode: 'general_mentor', 'bug_reporting', 'bug_solving', 'error_explainer', 'draft_reviewer', 'glossary'",
+    )
+
+
+class AIChatResponse(BaseModel):
+    reply: str = Field(..., description="Educational, helpful response formatted in markdown")
+    suggested_followups: list[str] = Field(
+        default_factory=list,
+        description="Quick follow-up questions the beginner can click to continue learning",
+    )
+    category: str | None = Field(default=None, description="Topic category (e.g., 'Bug Reporting', 'Debugging', 'Error Diagnostics')")
+    helpful_tips: list[str] = Field(default_factory=list, description="Actionable best practice bullet points")
+
+
+class AIChatTopicItem(BaseModel):
+    id: str
+    title: str
+    prompt: str
+    badge: str | None = None
+    icon: str | None = None
+
+
+class AIChatTopicCategory(BaseModel):
+    category_id: str
+    category_title: str
+    description: str
+    topics: list[AIChatTopicItem]
+
+
+class AIChatTopicsResponse(BaseModel):
+    categories: list[AIChatTopicCategory]
+

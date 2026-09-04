@@ -13,6 +13,11 @@ from app.models import Issue, IssuePriority, IssueSeverity, IssueStatus, Sprint
 from app.schemas import (
     AIAssistRequest,
     AIAssistResponse,
+    AIChatRequest,
+    AIChatResponse,
+    AIChatTopicCategory,
+    AIChatTopicItem,
+    AIChatTopicsResponse,
     CodeFixRequest,
     CodeFixResponse,
     DefectClassifyRequest,
@@ -1774,3 +1779,1312 @@ Response:
         )
     except Exception:
         return _fallback_defect_classification(request.description, request.title or "")
+
+
+# ── AI Chatbot & Beginner QA/Developer Mentor ─────────────────────────────────
+
+CHAT_MENTOR_SYSTEM_PROMPT = """You are BugFlow AI Mentor, a world-class, empathetic, and highly knowledgeable QA & Software Engineering mentor.
+Your mission is to help beginners and developers master software bug reporting, troubleshooting, root cause analysis, code debugging, and QA workflows.
+
+GUIDELINES FOR YOUR RESPONSES:
+1. Empathy & Clarity: Explain concepts clearly without unnecessary jargon. When technical terms are needed (e.g., 'Stack Trace', 'Race Condition', 'Idempotency', 'Regression'), define them simply with real-world analogies.
+2. Structure & Formatting: Use markdown headers, bold keywords, numbered step-by-step procedures, and clean code blocks with language identifiers.
+3. Action-Oriented: Always provide concrete, actionable advice (e.g., exact questions to answer in a bug report, specific commands to run, code examples showing Before vs After).
+4. Dual Perspective: Help both reporters (how to write clean, reproducible bug reports) and developers (how to diagnose, locate, fix, and test software defects).
+5. Response Schema: Return a JSON object with:
+   - "reply": Markdown formatted educational response.
+   - "suggested_followups": 3 to 4 short, relevant follow-up questions a beginner might ask next.
+   - "category": Topic category (e.g., "Bug Reporting", "Debugging", "Error Diagnostics", "QA Foundations", "Code Fixes").
+   - "helpful_tips": 2 to 3 key takeaway bullet points.
+"""
+
+
+def get_chat_starter_topics() -> AIChatTopicsResponse:
+    """Return categorized beginner topics and prompt starter chips."""
+    categories = [
+        AIChatTopicCategory(
+            category_id="foundations",
+            category_title="🚀 QA & Bug Foundations",
+            description="Essential concepts every developer and QA tester needs to know.",
+            topics=[
+                AIChatTopicItem(
+                    id="how_to_report",
+                    title="How to write a great bug report?",
+                    prompt="Can you guide me step-by-step on how to write a clear, professional bug report in BugFlow?",
+                    badge="Popular",
+                    icon="FileText",
+                ),
+                AIChatTopicItem(
+                    id="severity_vs_priority",
+                    title="Severity vs Priority: What's the difference?",
+                    prompt="Can you explain the difference between Bug Severity and Priority with simple real-world examples and a 2x2 matrix?",
+                    badge="Essential",
+                    icon="Flame",
+                ),
+                AIChatTopicItem(
+                    id="steps_to_reproduce",
+                    title="How to write good Steps to Reproduce?",
+                    prompt="How do I write effective, unambiguous steps to reproduce a bug so that developers can replicate it instantly?",
+                    badge="Guide",
+                    icon="CheckSquare",
+                ),
+                AIChatTopicItem(
+                    id="expected_vs_actual",
+                    title="Expected vs Actual Result: Why does it matter?",
+                    prompt="What is the difference between Expected Behavior and Actual Behavior, and how should I phrase them?",
+                    badge="Core",
+                    icon="GitCompare",
+                ),
+                AIChatTopicItem(
+                    id="regression_vs_feature",
+                    title="What is a Regression bug?",
+                    prompt="What is a regression defect, why do regressions happen, and how do teams prevent them?",
+                    badge="Concept",
+                    icon="History",
+                ),
+            ],
+        ),
+        AIChatTopicCategory(
+            category_id="bug_reporting",
+            category_title="📝 Bug Reporting Copilot",
+            description="Interactive tools and advice to make your bug reports high quality.",
+            topics=[
+                AIChatTopicItem(
+                    id="review_draft",
+                    title="Review my draft bug report",
+                    prompt="Can you review my draft bug report and tell me what is missing, what can be improved, and give me a polished version?",
+                    badge="Reviewer",
+                    icon="Sparkles",
+                ),
+                AIChatTopicItem(
+                    id="intermittent_bugs",
+                    title="How to report intermittent / flaky bugs?",
+                    prompt="How should I report a bug that happens only sometimes (intermittent / flaky defect)? What clues should I gather?",
+                    badge="Pro Tip",
+                    icon="Zap",
+                ),
+                AIChatTopicItem(
+                    id="logs_and_screenshots",
+                    title="What attachments & logs should I include?",
+                    prompt="What logs, browser console outputs, network payloads, and screenshots should I attach to a bug report?",
+                    badge="Checklist",
+                    icon="Paperclip",
+                ),
+                AIChatTopicItem(
+                    id="categorize_bug",
+                    title="How to pick Category & Defect Type?",
+                    prompt="How do I choose the correct Defect Category (e.g., UI, Backend, Payment, Security) and Defect Type (Functional, Crash, Performance)?",
+                    badge="Taxonomy",
+                    icon="Layers",
+                ),
+            ],
+        ),
+        AIChatTopicCategory(
+            category_id="bug_solving",
+            category_title="🛠️ Bug Solving & Debugging",
+            description="Frameworks and techniques to diagnose, troubleshoot, and fix bugs.",
+            topics=[
+                AIChatTopicItem(
+                    id="troubleshooting_framework",
+                    title="Step-by-step troubleshooting checklist",
+                    prompt="What is a systematic step-by-step checklist to debug any software bug from report to resolution?",
+                    badge="Methodology",
+                    icon="Cpu",
+                ),
+                AIChatTopicItem(
+                    id="locate_in_code",
+                    title="How do I locate where a bug is in code?",
+                    prompt="When given a bug description or error, how do I trace through the codebase to pinpoint the exact file and function causing the issue?",
+                    badge="Code Search",
+                    icon="Search",
+                ),
+                AIChatTopicItem(
+                    id="reproduce_locally",
+                    title="How to reproduce bugs in local dev environment?",
+                    prompt="What are best practices for reproducing user-reported production bugs on a local development setup?",
+                    badge="Setup",
+                    icon="Bot",
+                ),
+                AIChatTopicItem(
+                    id="unit_testing_fix",
+                    title="Writing tests to prove and fix bugs",
+                    prompt="How should I write a unit or integration test that fails before my fix and passes after my fix to prevent regression?",
+                    badge="Testing",
+                    icon="TestTube",
+                ),
+                AIChatTopicItem(
+                    id="verify_and_close",
+                    title="Bug verification & closing criteria",
+                    prompt="What checklist should QA and developers follow before moving a bug from In Progress to Resolved and Closed?",
+                    badge="Workflow",
+                    icon="CheckCircle",
+                ),
+            ],
+        ),
+        AIChatTopicCategory(
+            category_id="error_diagnostics",
+            category_title="🔍 Common Error Explanations",
+            description="Understand and fix the most common errors beginners encounter.",
+            topics=[
+                AIChatTopicItem(
+                    id="err_500",
+                    title="500 Internal Server Error: What it means & how to fix",
+                    prompt="What does HTTP 500 Internal Server Error mean, where should I look for clues, and how do I fix it?",
+                    badge="HTTP",
+                    icon="ShieldAlert",
+                ),
+                AIChatTopicItem(
+                    id="err_undefined",
+                    title="JavaScript: Cannot read properties of undefined / null",
+                    prompt="Why does 'TypeError: Cannot read properties of undefined' happen in JavaScript/React and how do I fix it safely?",
+                    badge="JavaScript",
+                    icon="Code",
+                ),
+                AIChatTopicItem(
+                    id="err_cors",
+                    title="Understanding & fixing CORS errors",
+                    prompt="What is a CORS error (Cross-Origin Resource Sharing), why does the browser block requests, and how do I fix it in backend & frontend?",
+                    badge="Web API",
+                    icon="Lock",
+                ),
+                AIChatTopicItem(
+                    id="err_sql_fk",
+                    title="SQL foreign key & database transaction errors",
+                    prompt="What causes database IntegrityError or foreign key violation errors and how do I resolve them?",
+                    badge="Database",
+                    icon="Tag",
+                ),
+                AIChatTopicItem(
+                    id="err_auth_codes",
+                    title="HTTP 401 Unauthorized vs 403 Forbidden",
+                    prompt="What is the difference between HTTP 401 Unauthorized and HTTP 403 Forbidden, and how should token auth handle them?",
+                    badge="Auth",
+                    icon="Shield",
+                ),
+                AIChatTopicItem(
+                    id="err_race_condition",
+                    title="Async race conditions & state bugs",
+                    prompt="What is a race condition in asynchronous web applications and what techniques prevent state corruption?",
+                    badge="Async",
+                    icon="Zap",
+                ),
+            ],
+        ),
+    ]
+    return AIChatTopicsResponse(categories=categories)
+
+
+def _has_kw(text: str, *terms: str) -> bool:
+    for t in terms:
+        if " " in t or "-" in t or "_" in t or "." in t:
+            if t in text:
+                return True
+        else:
+            if re.search(r"\b" + re.escape(t) + r"\b", text):
+                return True
+    return False
+
+
+def _fallback_chat_response(
+    messages: list[Any],
+    context: dict[str, Any] | None = None,
+    mode: str | None = None,
+) -> AIChatResponse:
+    """Rich rule-based QA & developer mentoring fallback engine."""
+    last_msg = ""
+    for m in reversed(messages):
+        role = getattr(m, "role", None) or (m.get("role") if isinstance(m, dict) else "")
+        if role == "user":
+            last_msg = getattr(m, "content", None) or (m.get("content") if isinstance(m, dict) else "")
+            break
+
+    lowered = last_msg.lower().strip()
+    ctx = context or {}
+
+    # 1. Draft Reviewer Mode or prompt requesting draft review
+    if mode == "draft_reviewer" or _has_kw(lowered, "review my draft", "review this bug", "critique my report", "review draft", "critique draft"):
+        draft_title = ctx.get("draft_title") or ctx.get("title") or ""
+        draft_desc = ctx.get("draft_description") or ctx.get("description") or last_msg
+        class_res = _fallback_defect_classification(draft_desc, draft_title)
+
+        return AIChatResponse(
+            reply=f"""### 🌟 AI Bug Report Review & Quality Audit
+
+I evaluated your draft bug report. Here is a breakdown of strengths, missing elements, and an enhanced production-ready version.
+
+---
+
+#### 📊 Quality Score: **8.5 / 10** (Strong Foundation)
+
+#### ✅ What's Good:
+- The core problem is identified.
+- The intent and affected component are recognizable.
+
+#### ⚠️ Areas to Strengthen:
+1. **Numbered Steps to Reproduce**: Convert narrative text into sequential 1, 2, 3 steps.
+2. **Explicit Expected vs Actual**: Clearly delineate what the user expected vs the exact anomaly observed.
+3. **Environmental Context**: Mention browser, operating system, or environment (e.g., Chrome v128, macOS Sonoma, Dev/Staging).
+4. **Error Logs & Status Codes**: If an API or console error occurred (e.g. 500, 404, uncaught promise), note it in the technical section.
+
+---
+
+#### 📋 Recommended Polished Bug Report:
+
+**Title**: `{_infer_title(draft_title or draft_desc)}`
+
+**Defect Category**: `{class_res.category}` • **Module**: `{class_res.module}` • **Severity**: `{class_res.suggested_severity.value.capitalize()}` • **Priority**: `{class_res.suggested_priority.value.capitalize()}`
+
+**Summary**:
+• {draft_desc[:120].strip() if len(draft_desc) > 10 else "User encounters an unexpected failure during normal application workflow."}
+
+**Steps to Reproduce**:
+1. Open the application and sign in with standard user credentials.
+2. Navigate to the affected module page.
+3. Perform the triggering action (e.g. submit form, click action button, upload file).
+4. Observe the unexpected failure or error state.
+
+**Expected Result**:
+• The operation completes successfully with confirmation feedback and state update.
+
+**Actual Result**:
+• An unexpected error occurs, blocking user workflow and failing to persist changes.
+
+**Technical & Developer Diagnostic Notes**:
+• Inspect browser Network tab for non-200 responses.
+• Check backend server logs for unhandled exception traces.
+""",
+            suggested_followups=[
+                "How do I determine if this bug is High or Critical severity?",
+                "What screenshots or network payloads should I attach?",
+                "How can I test if this is a regression?",
+                "How do I assign this to the right developer?",
+            ],
+            category="Bug Report Review",
+            helpful_tips=[
+                "Always separate Steps to Reproduce into numbered single actions.",
+                "Include the exact error message or HTTP status code whenever possible.",
+                "Mention whether the bug happens 100% of the time or intermittently.",
+            ],
+        )
+
+    # 2. Concurrency, Double Submit & Race Conditions
+    if _has_kw(lowered, "race condition", "race conditions", "concurrency", "debounce", "throttle", "double submit", "double click", "double payment"):
+        return AIChatResponse(
+            reply="""### ⚡ Understanding & Preventing Async Race Conditions
+
+#### 🧩 What is a Race Condition?
+A **race condition** occurs when the outcome of a program depends on the unpredictable timing or sequence of asynchronous events. For example, if a user rapidly clicks "Pay Now" twice, two concurrent HTTP requests might charge the card two times before the first one marks the order as paid.
+
+---
+
+#### 🛡️ Techniques to Prevent Race Conditions:
+
+1. **Frontend: Disable Submit Button While Loading**:
+   ```jsx
+   <button disabled={loading} onClick={handleSubmit}>
+     {loading ? 'Processing...' : 'Submit Bug'}
+   </button>
+   ```
+
+2. **Frontend: Debouncing Rapid Inputs**:
+   ```javascript
+   // Debounce search input to wait 300ms after user stops typing
+   let timer;
+   function handleSearchChange(e) {
+     clearTimeout(timer);
+     timer = setTimeout(() => fetchSearchResults(e.target.value), 300);
+   }
+   ```
+
+3. **Backend: Idempotency Keys & Database Unique Constraints**:
+   - Use unique database constraints (e.g., `(user_id, idempotency_key)`).
+   - Use database row locks (`SELECT ... FOR UPDATE`) during sensitive balance deductions.
+""",
+            suggested_followups=[
+                "What is an Idempotent API endpoint?",
+                "How do I cancel stale fetch requests with AbortController?",
+                "What is the difference between Debounce and Throttle?",
+            ],
+            category="Concurrency & Async",
+            helpful_tips=[
+                "Always disable submission buttons immediately on initial click.",
+                "Use AbortController to cancel previous in-flight requests when a search query changes.",
+            ],
+        )
+
+    # 3. Intermittent & Flaky Bugs
+    if _has_kw(lowered, "flaky", "intermittent", "heisenbug", "happens sometimes", "random bug", "rarely occurs", "intermittent defect"):
+        return AIChatResponse(
+            reply="""### 🔍 How to Track & Solve Intermittent / Flaky Bugs
+
+#### 🧩 Why do Intermittent Bugs Happen?
+Intermittent bugs (often called **Heisenbugs**) don't occur 100% of the time. The main culprits are:
+1. **Timing & Network Latency**: Slow 3G connections vs fast local WiFi.
+2. **State Left Behind**: A previous test or action left dirty state in localStorage or database.
+3. **Timezones & Date Clocks**: Bug triggers only at midnight UTC or across daylight saving transitions.
+4. **Third-Party Rate Limiting**: Intermittent 429 Too Many Requests from external APIs.
+
+---
+
+#### 🛠️ Strategy to Capture Intermittent Bugs:
+- **Add Detailed Breadcrumb Logs**: Log key milestones with timestamps.
+- **Record Network HAR Files**: Use Chrome DevTools -> Network -> Save all as HAR with content.
+- **Automated Stress Testing Loop**: Run the reproduction test script in a loop 100 times to observe the failure rate.
+""",
+            suggested_followups=[
+                "How do I export and inspect a HAR network log file?",
+                "How to write deterministic automated tests that never flake?",
+                "How do browser caching issues cause intermittent bugs?",
+            ],
+            category="Advanced Debugging",
+            helpful_tips=[
+                "Note down the exact time, timezone, and user role whenever an intermittent bug occurs.",
+                "Look for race conditions and asynchronous promise handling without `await`.",
+            ],
+        )
+
+    # 4. Docker, Local Environment & Port Issues
+    if _has_kw(lowered, "docker", "eaddrinuse", "address already in use", "port 8000", "port 5173", "connection refused", "econnrefused"):
+        return AIChatResponse(
+            reply="""### 🐳 Docker & Local Dev Environment Troubleshooting
+
+#### 🧩 Common Environment Issues:
+
+1. **`Error: listen EADDRINUSE: address already in use :::8000` / `:::5173`**:
+   - **Cause**: Another instance of uvicorn/vite/node is already running on that port.
+   - **Fix (macOS/Linux)**:
+     ```bash
+     lsof -i :8000
+     kill -9 <PID>
+     ```
+
+2. **`Connection Refused (ECONNREFUSED)`**:
+   - **Cause**: The frontend is trying to call `http://localhost:8000/api`, but the backend server is stopped.
+   - **Fix**: Start the backend server in your terminal:
+     ```bash
+     cd backend && ./venv/bin/uvicorn app.main:app --reload --port 8000
+     ```
+
+3. **Missing `.env` Variables**:
+   - **Fix**: Ensure your `.env` file exists in the project root/backend directory and contains required keys.
+""",
+            suggested_followups=[
+                "How do I run BugFlow with docker-compose up?",
+                "How do I kill background processes holding port 8000 on Mac?",
+                "How do environment variables get loaded into FastAPI via Pydantic?",
+            ],
+            category="DevOps & Environment",
+            helpful_tips=[
+                "Check `lsof -i :<port>` whenever you get 'port already in use' errors.",
+                "Always keep a `.env.example` file in your repository as a template.",
+            ],
+        )
+
+    # 5. Python Common Exceptions (AttributeError, KeyError, IndexError, etc.)
+    if _has_kw(lowered, "attributeerror", "keyerror", "indexerror", "modulenotfounderror", "importerror", "indentationerror", "zerodivisionerror", "python error", "python exception"):
+        return AIChatResponse(
+            reply="""### 🐍 Diagnosing & Fixing Common Python Exceptions
+
+#### 🧩 Top Python Exceptions & Solutions:
+
+1. **`AttributeError: 'NoneType' object has no attribute 'x'`**:
+   - **Cause**: Trying to access `.x` on a variable that is `None` (e.g. database `.first()` returned nothing).
+   - **Fix**: Check `if obj is not None:` or use default guards.
+
+2. **`KeyError: 'field_name'`**:
+   - **Cause**: Accessing dictionary key `data['field_name']` when the key doesn't exist.
+   - **Fix**: Use `data.get('field_name', default_value)`.
+
+3. **`IndexError: list index out of range`**:
+   - **Cause**: Accessing `items[0]` or `items[i]` on an empty or shorter list.
+   - **Fix**: Check `if len(items) > 0:` before indexing or use a loop.
+
+4. **`ModuleNotFoundError: No module named 'x'`**:
+   - **Cause**: Package not installed in the active virtual environment.
+   - **Fix**: Activate your venv (`source venv/bin/activate`) and run `pip install x`.
+
+---
+
+#### 🛠️ Defensive Coding Pattern:
+```python
+# Safe dict access & None checking
+user_data = get_user_payload()
+email = user_data.get("email")
+if not email:
+    raise HTTPException(status_code=422, detail="Email is required.")
+```
+""",
+            suggested_followups=[
+                "How do I set up custom exception handlers in FastAPI?",
+                "What is the difference between ValueError and TypeError?",
+                "How do I debug Python code using pdb or breakpoints in VS Code?",
+            ],
+            category="Python Diagnostics",
+            helpful_tips=[
+                "Use `.get()` with a default value instead of direct bracket access `data['key']`.",
+                "Always check if database query results are `None` before reading their fields.",
+            ],
+        )
+
+    # 6. CSS, Styling & Layout Bugs
+    if _has_kw(lowered, "css", "center a div", "flexbox", "grid", "z-index", "responsive", "overflow", "dark mode"):
+        return AIChatResponse(
+            reply="""### 🎨 CSS Layout, Flexbox, Grid & Styling Solutions
+
+#### 🧩 1. How to Perfectly Center Anything:
+```css
+/* Modern Grid centering (Easiest) */
+.center-container {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+/* Flexbox centering (Great for row layouts) */
+.flex-center {
+  display: flex;
+  align-items: center;    /* vertical */
+  justify-content: center; /* horizontal */
+}
+```
+
+---
+
+#### 🧩 2. Fixing `z-index` Stacking Context Bugs:
+- If an element with `z-index: 9999` is still hidden behind another element, it is trapped inside a **parent stacking context**.
+- **Fix**: Ensure the parent container has `position: relative; z-index: ...` or move the modal/overlay to the top-level DOM root (e.g., `document.body`).
+
+---
+
+#### 🧩 3. Responsive Design & Flex Wrap:
+```css
+.card-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+.card {
+  flex: 1 1 300px; /* grow, shrink, min-width 300px */
+}
+```
+""",
+            suggested_followups=[
+                "What is the difference between CSS Flexbox and CSS Grid?",
+                "How do CSS Custom Properties (Variables) work for Dark Mode?",
+                "How do I prevent text overflow with ellipsis in CSS?",
+            ],
+            category="Frontend & CSS",
+            helpful_tips=[
+                "Use `box-sizing: border-box` on all elements to prevent padding from expanding box sizes.",
+                "Use CSS variables (e.g. `var(--bg-primary)`) for seamless light/dark mode theming.",
+            ],
+        )
+
+    # 2. Error Explainer Mode or common error queries
+    if mode == "error_explainer" or any(k in lowered for k in ["500", "undefined", "cors", "typeerror", "nullpointer", "integrityerror", "stack trace", "explain error"]):
+        if "500" in lowered or "internal server" in lowered:
+            return AIChatResponse(
+                reply="""### 🔍 Explaining `HTTP 500 Internal Server Error`
+
+#### 🧩 What is a 500 Internal Server Error?
+An **HTTP 500** is a generic server-side error. It means the backend server encountered an unexpected condition or unhandled exception that prevented it from fulfilling the request. The frontend received no valid JSON response because the backend crashed mid-execution.
+
+---
+
+#### 🎯 Common Root Causes:
+1. **Unhandled Null / None Reference**: The backend code attempted to access an attribute on a variable that evaluated to `None` or `null` (e.g. `user.profile.phone` when `profile` is None).
+2. **Database Constraint Violation**: Inserting duplicate unique keys, violating foreign key constraints, or database connection timeout.
+3. **Missing Environment Variable / Secret**: A third-party service key (e.g. Stripe, OpenAI, AWS S3) is missing or invalid.
+4. **Data Type / Serialization Mismatch**: Attempting to serialize non-serializable objects into JSON (e.g., raw datetime objects, circular references).
+
+---
+
+#### 🛠️ Step-by-Step Fix Guide:
+1. **Check Backend Terminal / Server Logs**:
+   Look at your uvicorn/gunicorn terminal or server log stream. Look for the traceback ending in an Exception (e.g. `AttributeError`, `KeyError`, `SQLAlchemyError`).
+2. **Identify the Line Number**:
+   Find the last line in the traceback pointing to your project files (e.g. `app/routers/issues.py:84`).
+3. **Add Defensive Checks & Exception Handling**:
+   ```python
+   # Example: Before (causes 500 on missing record)
+   item = db.query(Model).filter_by(id=item_id).first()
+   return {"name": item.name}  # Crashes if item is None!
+
+   # Example: After (returns clean 404 instead of 500 crash)
+   item = db.query(Model).filter_by(id=item_id).first()
+   if not item:
+       raise HTTPException(status_code=404, detail="Item not found")
+   return {"name": item.name}
+   ```
+4. **Write a Unit Test**: Add a test that sends missing/invalid data and asserts HTTP 404 or 422 rather than 500.
+""",
+                suggested_followups=[
+                    "What is the difference between a 400 and a 500 error?",
+                    "How do I set up global error handlers in FastAPI/Python?",
+                    "How to debug database transaction rollback errors?",
+                    "How do I write a test for this error?",
+                ],
+                category="Error Diagnostics",
+                helpful_tips=[
+                    "Never let unhandled exceptions crash to 500 — wrap endpoints with validation or custom HTTPException handlers.",
+                    "Always inspect the server log traceback, not just the frontend network status.",
+                ],
+            )
+
+        if "undefined" in lowered or "null" in lowered or "typeerror" in lowered:
+            return AIChatResponse(
+                reply="""### 🔍 Explaining `TypeError: Cannot read properties of undefined (reading '...')`
+
+#### 🧩 What does this error mean?
+In JavaScript/TypeScript, this error occurs when you try to access a property or call a method on a variable whose value is `undefined` or `null`.
+
+For example:
+```javascript
+// If user is undefined, this throws TypeError: Cannot read properties of undefined (reading 'name')
+console.log(user.name);
+```
+
+---
+
+#### 🎯 Common Scenarios:
+1. **Asynchronous Data Fetching**: Rendering components before an API response has arrived (e.g. `data.items.map(...)` before `data` is populated).
+2. **Missing Optional Fields**: Accessing nested properties that don't exist on all records (e.g. `issue.assignee.username` when the issue is unassigned).
+3. **Failed Array Searches**: Calling array methods after `.find()` when no element matched.
+
+---
+
+#### 🛠️ How to Fix It (Modern Best Practices):
+1. **Use Optional Chaining (`?.`)**:
+   ```javascript
+   // Safe navigation: returns undefined instead of crashing
+   const username = issue?.assigned_developer?.username || 'Unassigned';
+   ```
+2. **Provide Safe Initial State**:
+   ```javascript
+   // In React component state:
+   const [items, setItems] = useState([]); // Default to empty array [] instead of undefined/null
+   ```
+3. **Add Guard Clauses & Loading States**:
+   ```javascript
+   if (loading) return <Spinner />;
+   if (!data) return <EmptyState message="No records found" />;
+   ```
+4. **Use Nullish Coalescing (`??`)**:
+   ```javascript
+   const count = data?.total_count ?? 0;
+   ```
+""",
+                suggested_followups=[
+                    "What is the difference between null and undefined in JavaScript?",
+                    "How do I safely render list items with .map() in React?",
+                    "How can TypeScript prevent undefined property errors?",
+                ],
+                category="JavaScript Errors",
+                helpful_tips=[
+                    "Always initialize React array states with `[]` rather than `null`.",
+                    "Use optional chaining `?.` when referencing nested properties from backend APIs.",
+                ],
+            )
+
+        if "cors" in lowered:
+            return AIChatResponse(
+                reply="""### 🔍 Understanding & Fixing CORS (Cross-Origin Resource Sharing) Errors
+
+#### 🧩 What is CORS?
+**CORS** is a browser security mechanism (Same-Origin Policy). The browser blocks frontend JavaScript (running on e.g., `http://localhost:5173`) from reading HTTP responses from a backend on a different port or domain (e.g., `http://localhost:8000`) unless the backend explicitly sends permission headers.
+
+---
+
+#### ⚠️ Key Rule: CORS is Enforced by the Browser, Not the Server
+- The backend server actually processes the request and returns a response.
+- The **browser** blocks the frontend code from reading the response because `Access-Control-Allow-Origin` is missing or mismatched.
+
+---
+
+#### 🛠️ How to Fix CORS in FastAPI / Backend:
+Add `CORSMiddleware` in your backend application configuration:
+
+```python
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite Dev Server
+        "http://127.0.0.1:5173",
+        "https://your-production-app.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow GET, POST, PUT, DELETE, OPTIONS
+    allow_headers=["*"],  # Allow Authorization, Content-Type, etc.
+)
+```
+
+---
+
+#### 💡 Troubleshooting Checklist:
+1. Ensure the backend handles `OPTIONS` preflight requests (FastAPI `CORSMiddleware` does this automatically).
+2. If using cookies/credentials (`Authorization` Bearer tokens or cookies), make sure `allow_credentials=True` and `allow_origins` does not conflict with wildcard rules.
+3. In Vite/frontend, you can also set up a reverse proxy in `vite.config.js`:
+   ```javascript
+   server: {
+     proxy: {
+       '/api': 'http://127.0.0.1:8000'
+     }
+   }
+   ```
+""",
+                suggested_followups=[
+                    "Why do OPTIONS preflight requests happen?",
+                    "How do I configure Vite reverse proxy for API requests?",
+                    "What is the difference between same-origin and cross-origin?",
+                ],
+                category="Web Security",
+                helpful_tips=[
+                    "CORS errors must be fixed in the backend server configuration, not on the frontend.",
+                    "Using a dev proxy in Vite/Webpack eliminates CORS issues in local development.",
+                ],
+            )
+
+    # 3. Severity vs Priority
+    if any(k in lowered for k in ["severity vs priority", "severity and priority", "difference between severity"]):
+        return AIChatResponse(
+            reply="""### ⚖️ Bug Severity vs. Bug Priority Explained
+
+A common dilemma for beginners in QA and software engineering is distinguishing between **Severity** and **Priority**.
+
+---
+
+### 📊 Quick Comparison:
+| Aspect | **Severity** | **Priority** |
+| :--- | :--- | :--- |
+| **Definition** | Technical impact on the software system & stability | Business urgency on how fast it must be fixed |
+| **Driven By** | QA Tester / Technical Architecture | Project Manager / Product Owner / Business |
+| **Question Asked** | *"How badly does this break the code/system?"* | *"How quickly do we need this fixed for users?"* |
+| **Scale** | Low, Medium, High, Critical | Low, Medium, High, Critical |
+
+---
+
+### 🧩 Real-World 2x2 Matrix Examples:
+
+#### 1. High Severity, High Priority (Immediate P0 Hotfix)
+- **Example**: The payment checkout page crashes with 500 error on clicking "Pay Now".
+- **Why**: The technical functionality is broken (High Severity) AND users cannot complete transactions (High Priority).
+
+#### 2. High Severity, Low Priority (System Crash on Rare Edge Case)
+- **Example**: App crashes when importing an legacy 2003 XML format that only 0.01% of users use.
+- **Why**: It causes a fatal crash (High Severity), but almost nobody is impacted right now (Low Priority).
+
+#### 3. Low Severity, High Priority (Cosmetic but Crucial Brand Issue)
+- **Example**: Company logo on the homepage is misspelled as "BoogFlow" or CEO's name is wrong.
+- **Why**: Zero code or database crash (Low Severity), but extremely embarrassing for brand reputation (High Priority).
+
+#### 4. Low Severity, Low Priority (Minor Cosmetic Glitch)
+- **Example**: A tooltip on a settings subpage has a 2px alignment mismatch in dark mode.
+- **Why**: System works perfectly and minimal user impact.
+""",
+            suggested_followups=[
+                "How do I determine Severity when logging a bug?",
+                "What criteria qualifies a defect as Critical?",
+                "Can a developer downgrade a bug's severity?",
+                "How does BugFlow's AI predict defect severity?",
+            ],
+            category="QA Foundations",
+            helpful_tips=[
+                "Severity measures technical damage; Priority measures business timing.",
+                "Always explain the business risk in the description so PMs can prioritize accurately.",
+            ],
+        )
+
+    # 4. How to write a bug report / steps to reproduce
+    if any(k in lowered for k in ["how to report", "how do i write a bug", "steps to reproduce", "first bug report", "write a good bug"]):
+        return AIChatResponse(
+            reply="""### 📝 The Beginner's Complete Guide to Writing Bug Reports
+
+A great bug report saves developers hours of guesswork and gets fixed much faster. Here is the golden formula used at top engineering teams.
+
+---
+
+### 🏆 The 6 Essential Elements of Every Bug Report:
+
+#### 1. Clear & Actionable Title
+- ❌ *Bad*: "Button broken"
+- ✅ *Good*: `[Checkout] Payment submit button becomes unresponsive after entering coupon code`
+- **Formula**: `[Component/Module] Specific symptom when trigger condition happens`
+
+#### 2. Pre-Conditions & Environment
+- **User Role**: Admin, Developer, or Regular Reporter?
+- **Environment**: OS (macOS/Windows/Linux), Browser & Version (Chrome 128), Device (Desktop/Mobile).
+
+#### 3. Step-by-Step Instructions (Numbered & Explicit)
+Write steps so that someone with zero context can reproduce the issue:
+1. Log in to BugFlow with a `Developer` account.
+2. Navigate to **Sprints** -> Select **Sprint 3**.
+3. Drag ticket `DEF-42` from **Open** to **In Progress**.
+4. Refresh the page.
+
+#### 4. Expected Result vs Actual Result
+- **Expected**: The ticket status persists as `In Progress` after reload.
+- **Actual**: The ticket reverts back to `Open` and browser console logs `403 Forbidden`.
+
+#### 5. Evidence (Screenshots, Logs & Network)
+- Attach a screenshot or screen recording.
+- If an API failed, copy the Network response payload or console error log.
+
+#### 6. Severity & Defect Type
+- Tag whether it is a **Functional Defect**, **UI Glitch**, **Performance Lag**, or **Crash**.
+""",
+            suggested_followups=[
+                "Can you review my draft bug report?",
+                "How do I capture browser network logs for bugs?",
+                "How do I handle bugs that only happen occasionally?",
+                "What is the difference between Expected and Actual behavior?",
+            ],
+            category="Bug Reporting",
+            helpful_tips=[
+                "Write steps as sequential commands: 1. Navigate..., 2. Click..., 3. Observe...",
+                "Always state what SHOULD happen alongside what DID happen.",
+            ],
+        )
+
+    # 5. Debugging & Troubleshooting Framework
+    if any(k in lowered for k in ["how to debug", "troubleshooting", "how to solve", "locate bug", "debugging checklist", "root cause", "rca"]):
+        return AIChatResponse(
+            reply="""### 🛠️ The 6-Step Developer Troubleshooting & Debugging Framework
+
+When you are assigned a bug or need to solve a software defect, follow this proven scientific debugging cycle:
+
+---
+
+### 🔬 The 6 Steps:
+
+```
+1. Reproduce ➡️ 2. Isolate ➡️ 3. Inspect Logs ➡️ 4. Form Hypothesis ➡️ 5. Patch ➡️ 6. Verify & Test
+```
+
+#### Step 1: Deterministic Reproduction
+- Before writing any code, reproduce the bug on your local development machine using the reporter's steps.
+- If you cannot reproduce it, check environment variables, seed database data, or browser caching.
+
+#### Step 2: Isolate the Boundary (Frontend vs Backend vs Database)
+- **Frontend Check**: Open Browser DevTools (`F12`) -> Network tab. Did the frontend send the wrong payload, or did the backend return an error?
+- **Backend Check**: Did the backend receive valid input but throw an unhandled exception or SQL error?
+- **Database Check**: Is there corrupt data or missing migration state in the database?
+
+#### Step 3: Inspect Logs & Stack Traces
+- Look at the top and bottom of the error stack trace.
+- Identify the exact filename and line number where execution failed.
+
+#### Step 4: Form a Root Cause Hypothesis
+- Ask **"Why did this line fail?"** (e.g. *Why was `user.id` null? Did the token expire? Did the serializer skip the field?*).
+
+#### Step 5: Implement the Minimal Correct Fix
+- Fix the root cause defensively (e.g. add null validation, fix query join, handle edge case).
+- Avoid quick hacks that mask the underlying bug.
+
+#### Step 6: Write a Regression Test & Verify
+- Write a unit test that replicates the bug scenario. Ensure it fails before your fix and passes with your fix.
+- Verify related features to ensure no side-effects were introduced.
+""",
+            suggested_followups=[
+                "How do I write a regression test in pytest or Jest?",
+                "How do I use breakpoint debuggers in Chrome / VS Code?",
+                "What is Root Cause Analysis (RCA)?",
+                "How to use BugFlow's Code Doctor to audit my fix?",
+            ],
+            category="Debugging 101",
+            helpful_tips=[
+                "Always reproduce the bug first before changing a single line of code.",
+                "A good bug fix always includes a regression test so the defect never comes back.",
+            ],
+        )
+
+    # 6. API, REST, HTTP Status Codes & Endpoints
+    if any(k in lowered for k in ["api", "rest", "http", "status code", "endpoint", "404", "401", "403", "422", "json"]):
+        return AIChatResponse(
+            reply="""### 🌐 Understanding APIs, REST & HTTP Status Codes
+
+#### 🧩 What is a REST API?
+An **API (Application Programming Interface)** allows two software systems to communicate. A **REST API** uses standard HTTP methods (`GET`, `POST`, `PUT`, `DELETE`) to perform CRUD (Create, Read, Update, Delete) operations on resources.
+
+---
+
+#### 🚦 Essential HTTP Status Codes:
+- **200 OK**: Request succeeded and data returned.
+- **201 Created**: Resource was successfully created (e.g., new bug report created).
+- **204 No Content**: Action succeeded with no body returned (e.g., deleted successfully).
+- **400 Bad Request**: Client sent invalid or malformed data.
+- **401 Unauthorized**: User is not authenticated (missing or invalid Bearer token).
+- **403 Forbidden**: User is authenticated, but lacks permissions (e.g., non-admin accessing admin panel).
+- **404 Not Found**: The requested resource ID or URL does not exist.
+- **422 Unprocessable Entity**: Data schema validation failed (e.g. email missing `@` or password too short).
+- **500 Internal Server Error**: Backend crashed due to unhandled exception.
+
+---
+
+#### 🛠️ Example: Making an Authenticated API Request:
+```javascript
+// Sending JWT Bearer token in request headers
+const response = await fetch('/api/issues', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('token')}`
+  },
+  body: JSON.stringify({
+    title: 'Payment button unresponsive',
+    severity: 'high',
+    project_id: 1
+  })
+});
+const data = await response.json();
+```
+""",
+            suggested_followups=[
+                "What is the difference between 401 Unauthorized and 403 Forbidden?",
+                "What is the difference between POST and PUT?",
+                "How do JWT tokens work?",
+                "How to fix a 500 Internal Server Error?",
+            ],
+            category="Web APIs & Protocols",
+            helpful_tips=[
+                "Always inspect HTTP status codes in Browser DevTools -> Network tab.",
+                "Use 422/400 for client validation errors and never let them crash to 500.",
+            ],
+        )
+
+    # 7. Authentication, JWT, Passwords & Security
+    if any(k in lowered for k in ["auth", "jwt", "token", "login", "password", "bearer", "session", "security", "hash"]):
+        return AIChatResponse(
+            reply="""### 🔐 Authentication & JWT Tokens Explained
+
+#### 🧩 How JWT Authentication Works in Web Apps:
+1. **User Login**: User submits email and password to `/api/auth/login`.
+2. **Password Verification**: Backend compares the submitted password against the salted `bcrypt` hash stored in the database.
+3. **Token Issuance**: Backend generates a signed **JWT (JSON Web Token)** containing the user's `id`, `email`, and `role` with an expiration timestamp.
+4. **Token Storage**: Frontend stores the token (e.g. in `localStorage` or `HttpOnly` cookie).
+5. **Protected Requests**: Frontend attaches `Authorization: Bearer <token>` on subsequent API calls.
+6. **Token Verification**: Backend validates the cryptographic signature without querying the database every time.
+
+---
+
+#### 🛡️ Best Practices for Beginners:
+- **Never Store Plaintext Passwords**: Always hash with `bcrypt` or `argon2`.
+- **Set Token Expiration**: Configure sensible token expiration (e.g., 24 hours or 7 days).
+- **Role-Based Access Control (RBAC)**: Enforce role checks on backend endpoints (e.g., `admin`, `developer`, `reporter`).
+""",
+            suggested_followups=[
+                "How do I protect routes with FastAPI Depends(get_current_user)?",
+                "What is the difference between localStorage and HttpOnly cookies?",
+                "How to implement Role-Based Access Control (RBAC)?",
+            ],
+            category="Security & Auth",
+            helpful_tips=[
+                "Always send tokens over HTTPS in production.",
+                "Never store sensitive secrets (like API keys or passwords) in frontend code.",
+            ],
+        )
+
+    # 8. Databases, SQL, SQLAlchemy & Transactions
+    if any(k in lowered for k in ["database", "sql", "postgres", "sqlite", "orm", "sqlalchemy", "query", "migration", "foreign key", "join"]):
+        return AIChatResponse(
+            reply="""### 🗄️ Databases, SQL & ORM Essentials
+
+#### 🧩 What is an ORM (Object Relational Mapper)?
+An **ORM** (like SQLAlchemy in Python or Prisma in JS) lets you interact with database tables using object-oriented code instead of writing raw SQL strings.
+
+---
+
+#### 🛠️ Common SQLAlchemy / SQL Operations:
+```python
+# 1. Query with Filter & Join
+open_bugs = (
+    db.query(Issue)
+    .filter(Issue.status == IssueStatus.OPEN)
+    .filter(Issue.project_id == project_id)
+    .order_by(Issue.created_at.desc())
+    .all()
+)
+
+# 2. Safe Creation with Commit & Rollback
+try:
+    new_issue = Issue(title=title, project_id=project_id, severity="high")
+    db.add(new_issue)
+    db.commit()
+    db.refresh(new_issue)
+except Exception:
+    db.rollback()  # Crucial: Roll back transaction on failure!
+    raise
+```
+
+---
+
+#### ⚠️ Common Database Pitfalls & How to Avoid Them:
+1. **Forgot `db.rollback()`**: If an insert fails and you don't rollback, subsequent queries on the same session will fail with `PendingRollbackError`.
+2. **N+1 Query Problem**: Fetching records in a loop instead of using `joinedload()` or bulk joins.
+3. **Foreign Key Violation**: Inserting a record with a `project_id` or `user_id` that does not exist in the referenced table.
+""",
+            suggested_followups=[
+                "How do I fix database transaction rollback errors?",
+                "What is the N+1 query problem and how do I solve it?",
+                "How do database indexes improve search performance?",
+            ],
+            category="Databases & SQL",
+            helpful_tips=[
+                "Always wrap database write transactions with try/except/rollback.",
+                "Add database indexes on frequently filtered columns like `project_id` and `status`.",
+            ],
+        )
+
+    # 9. Frontend, React, Components, Hooks & State
+    if any(k in lowered for k in ["react", "frontend", "hook", "useeffect", "usestate", "component", "props", "state", "render"]):
+        return AIChatResponse(
+            reply="""### ⚛️ Modern React, Hooks & State Management Guide
+
+#### 🧩 Core React Principles for Beginners:
+1. **Components**: Reusable UI building blocks that accept `props` and return JSX.
+2. **State (`useState`)**: Reactive data that triggers a UI re-render when modified.
+3. **Side Effects (`useEffect`)**: Handles asynchronous operations like API calls, timers, or DOM subscriptions.
+
+---
+
+#### 🛠️ Pattern: Safe API Data Fetching with Loading & Error States:
+```jsx
+function BugList({ projectId }) {
+  const [issues, setIssues] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      setLoading(true);
+      try {
+        const data = await getAllIssues({ project_id: projectId });
+        if (isMounted) setIssues(data);
+      } catch (err) {
+        if (isMounted) setError(err.message);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadData();
+    return () => { isMounted = false; }; // Cleanup on unmount
+  }, [projectId]);
+
+  if (loading) return <div>Loading defects...</div>;
+  if (error) return <div className="error-banner">{error}</div>;
+
+  return (
+    <ul>
+      {issues.map(issue => (
+        <li key={issue.id}>{issue.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+#### ⚠️ Common React Mistakes:
+- **Direct State Mutation**: Never do `state.items.push(x)`. Always do `setItems([...items, x])`.
+- **Missing Dependency in `useEffect`**: If you use a variable inside `useEffect`, include it in the dependency array `[dependency]`.
+""",
+            suggested_followups=[
+                "How do I prevent infinite loops in useEffect?",
+                "What is the difference between Props and State in React?",
+                "How does React Context API work for global authentication?",
+            ],
+            category="Frontend & React",
+            helpful_tips=[
+                "Never mutate state directly — always return a new array or object copy.",
+                "Always provide a unique `key` prop when rendering lists with `.map()`.",
+            ],
+        )
+
+    # 10. QA Testing Methodologies (Unit, Integration, E2E, Smoke, Regression)
+    if any(k in lowered for k in ["test", "testing", "unit test", "integration test", "e2e", "smoke test", "sanity", "pytest", "jest", "uat"]):
+        return AIChatResponse(
+            reply="""### 🧪 Software Testing Methodologies & QA Types
+
+#### 📊 The Testing Pyramid:
+```
+       /\\
+      / E2E \\        <- Fewest, slowest (e.g. Cypress, Playwright)
+     /-------\\
+    / Integration \\  <- Testing API endpoints with real database
+   /---------------\\
+  /   Unit Tests    \\ <- Most numerous, fastest (e.g. pytest, Jest)
+ /-------------------\\
+```
+
+---
+
+#### 🏆 Key Testing Types Explained:
+1. **Unit Testing**: Tests individual functions in isolation (e.g. testing the severity prediction calculation).
+2. **Integration Testing**: Tests how multiple modules interact (e.g. testing user registration -> JWT generation -> database insert).
+3. **End-to-End (E2E) Testing**: Simulates real user behavior in a browser from login to checkout.
+4. **Regression Testing**: Re-running existing tests after code changes to ensure existing features haven't broken.
+5. **Smoke Testing**: Quick high-level test to verify critical pathways are functional before deeper testing.
+
+---
+
+#### 🛠️ Example: Writing a Clean Unit Test with `pytest`:
+```python
+def test_issue_creation_defaults():
+    # Arrange
+    payload = {"title": "Test bug", "project_id": 1}
+
+    # Act
+    response = client.post("/api/issues", json=payload)
+
+    # Assert
+    assert response.status_code == 201
+    assert response.json()["status"] == "open"
+    assert response.json()["severity"] == "medium"
+```
+""",
+            suggested_followups=[
+                "How do I write a test for an endpoint that requires authentication?",
+                "What is Test-Driven Development (TDD)?",
+                "How to mock database calls in unit tests?",
+            ],
+            category="QA & Testing",
+            helpful_tips=[
+                "Follow the Arrange-Act-Assert (AAA) pattern when structuring test cases.",
+                "Write tests that replicate every reported bug before applying the fix.",
+            ],
+        )
+
+    # 11. Git, Branches, PRs & Merge Conflicts
+    if any(k in lowered for k in ["git", "branch", "commit", "merge", "pull request", "pr", "conflict", "rebase"]):
+        return AIChatResponse(
+            reply="""### 🌿 Git Workflow & Pull Requests for Defect Fixes
+
+#### 🧩 Standard Git Feature/Bugfix Branch Workflow:
+1. **Create a Dedicated Branch**:
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b fix/def-42-checkout-timeout
+   ```
+2. **Make Minimal, Atomic Commits**:
+   ```bash
+   git add app/routers/issues.py
+   git commit -m "fix(checkout): add null check on payment payload [DEF-42]"
+   ```
+3. **Push Branch & Open Pull Request**:
+   ```bash
+   git push origin fix/def-42-checkout-timeout
+   ```
+4. **Code Review & CI Tests**: Teammates review code and automated test suites pass.
+5. **Merge & Delete Branch**: Merged into `main` and ticket status moved to `Resolved`.
+
+---
+
+#### 🛠️ Resolving Merge Conflicts:
+If git reports conflicts when pulling main:
+```bash
+git checkout fix/def-42-checkout-timeout
+git merge main
+# Open conflicting files, resolve the <<<<<<< HEAD markers, then:
+git add .
+git commit -m "chore: resolve merge conflicts with main"
+git push
+```
+""",
+            suggested_followups=[
+                "What is the difference between git merge and git rebase?",
+                "How to write clear conventional commit messages?",
+                "How do I undo the last commit without losing my changes?",
+            ],
+            category="Version Control & Git",
+            helpful_tips=[
+                "Reference the BugFlow defect ID in your commit message (e.g. `[DEF-42]`).",
+                "Keep bugfix branches small and focused on a single defect.",
+            ],
+        )
+
+    # 12. Agile, Bug Lifecycle & Triage
+    if _has_kw(lowered, "lifecycle", "triage", "definition of done", "dod", "bug status", "workflow", "scrum", "sprint"):
+        return AIChatResponse(
+            reply="""### 🔄 The Software Bug Lifecycle & Agile Triage
+
+#### 📊 Standard Defect Status Transitions:
+```
+[ New / Open ] 
+      ⬇️ (Triage & Assignment)
+[ In Progress ] 
+      ⬇️ (Fix Implemented & Unit Tests Passed)
+[ Resolved / In Review ] 
+      ⬇️ (QA Verification on Staging)
+[ Closed / Done ] 
+      🔄 (If Defect Persists ➡️ Reopened)
+```
+
+---
+
+#### 🏆 Key Stages Explained:
+1. **Open**: Bug has been logged by QA or user and awaits triage.
+2. **In Progress**: Developer has reproduced the bug and is writing the fix.
+3. **Resolved**: Pull request is merged and fix is deployed to staging.
+4. **Verified / Closed**: QA tests the fix on staging, verifies acceptance criteria, and closes the ticket.
+5. **Reopened**: Defect still reproducible or caused a side-effect regression.
+""",
+            suggested_followups=[
+                "What happens during a Bug Triage meeting?",
+                "What is the Definition of Done (DoD) for a bug fix?",
+                "When should a bug be marked as 'Won't Fix' or 'Duplicate'?",
+            ],
+            category="Agile & Workflow",
+            helpful_tips=[
+                "A bug should only be moved to Closed after independent QA verification.",
+                "Always link the PR commit hash to the BugFlow defect ticket.",
+            ],
+        )
+
+    # 13. BugFlow Features & Platform Guide
+    if _has_kw(lowered, "bugflow", "sprint board", "code doctor", "how to use", "feature"):
+        return AIChatResponse(
+            reply="""### 🚀 BugFlow Features & Platform Guide
+
+BugFlow is built to streamline defect tracking, sprint velocity, and AI-assisted troubleshooting.
+
+---
+
+#### 🌟 Key Platform Features:
+1. **Defect Tracking & Kanban**:
+   - Filter bugs by Project, Severity, Priority, Status, or Assignee.
+   - Switch between **Table View** and **Kanban Board** with drag-and-drop status transitions.
+2. **AI Copilot in Bug Creation**:
+   - **Voice Bug Report**: Dictate your bug notes via speech-to-text.
+   - **Line-by-Line Expansion**: Expands rough notes into professional formatted defect reports.
+   - **Automatic Severity & Category Prediction**: AI suggests taxonomy and risk levels.
+   - **Duplicate Detection**: Prevents logging duplicate tickets in the project.
+3. **Sprint Board & Milestone Health**:
+   - Organize issues into active sprints.
+   - Evaluates sprint health scores and risk mitigations.
+4. **Code Doctor**:
+   - Audit code snippets for CWE vulnerabilities, performance bottlenecks, and race conditions with direct auto-generated diff repairs.
+5. **Resolution Assistance Copilot**:
+   - Inside Bug Detail Modal, provides developer diagnostic checklists and matching historical resolutions.
+6. **Executive PDF Reports**:
+   - Export official single-defect reports or project QA summaries in PDF format.
+""",
+            suggested_followups=[
+                "How do I create a new project and add team members?",
+                "How does BugFlow's Code Doctor fix syntax and logic errors?",
+                "How do I download a Defect Report PDF?",
+            ],
+            category="BugFlow Guide",
+            helpful_tips=[
+                "Use the AI Mentor button in the Report Bug form to critique draft descriptions.",
+                "Click 'Ask AI Mentor' in any Bug Detail Modal to get instant diagnosis steps.",
+            ],
+        )
+
+    # 19. General Open-Ended Mentoring Assistant
+    issue_title = ctx.get("issue_title") or ctx.get("title")
+    issue_desc = ctx.get("issue_description") or ctx.get("description")
+    project_name = ctx.get("project_name")
+
+    context_prefix = ""
+    if issue_title:
+        context_prefix = f"**Current Bug Context**: *{issue_title}*\n\n"
+
+    # Extract keywords to make response relevant even in fallback mode
+    words = [w for w in re.findall(r"\w+", lowered) if len(w) > 3 and w not in ["what", "how", "why", "when", "does", "have", "with", "this", "that", "from", "about", "tell", "please", "help"]]
+    topic_summary = " ".join(words[:4]).title() if words else "Software Engineering & QA"
+
+    return AIChatResponse(
+        reply=f"""{context_prefix}### 🤖 AI Mentor: Guide on {topic_summary}
+
+Here is a structured explanation and recommended best practices:
+
+---
+
+#### 💡 Core Principles & Overview:
+- When working with **{topic_summary}**, always start by breaking down the goal into clear, measurable steps.
+- **For Bug Reporting**: Always provide numbered steps to reproduce, expected vs actual behavior, and environment context.
+- **For Debugging & Fixing**: First reproduce locally, inspect terminal/browser logs for exact line numbers, form a hypothesis, apply a minimal fix, and verify with tests.
+
+---
+
+#### 🛠️ Recommended Action Steps:
+1. **Analyze Requirements / Symptoms**: Identify the exact trigger condition or technical error message.
+2. **Inspect Boundaries**: Determine if the issue is in the frontend client, backend API route, database schema, or network layer.
+3. **Defensive Implementation**: Write clean code with proper validation, null checks, and error boundaries.
+4. **Automated Verification**: Add a unit or integration test to prevent regression.
+
+---
+
+Feel free to ask a specific follow-up question or paste any error logs / code snippet below!
+""",
+        suggested_followups=[
+            "How do I write clear steps to reproduce?",
+            "What is the difference between Severity and Priority?",
+            "How to troubleshoot a 500 Internal Server Error?",
+            "How do I write a unit test for my fix?",
+        ],
+        category="Software Engineering Mentor",
+        helpful_tips=[
+            "You can paste code snippets, error traces, or draft bug descriptions directly into this chat.",
+            "Click any suggested follow-up question to explore deeper.",
+        ],
+    )
+
+
+async def generate_chat_response(request: AIChatRequest) -> AIChatResponse:
+    """Generate educational, beginner-friendly AI chat response with OpenAI and local fallback."""
+    openai_api_key = settings.openai_api_key
+    if not openai_api_key:
+        return _fallback_chat_response(request.messages, request.context, request.mode)
+
+    try:
+        client = OpenAI(api_key=openai_api_key, timeout=3.5)
+
+        # Build message history for OpenAI
+        api_messages = [{"role": "system", "content": CHAT_MENTOR_SYSTEM_PROMPT}]
+
+        # Inject active context if provided
+        if request.context:
+            context_str = json.dumps(request.context, indent=2)
+            api_messages.append({
+                "role": "system",
+                "content": f"Active User & Defect Context:\n```json\n{context_str}\n```\nMode: {request.mode or 'general_mentor'}",
+            })
+
+        for m in request.messages[-10:]:  # Keep recent 10 messages for context
+            api_messages.append({"role": m.role, "content": m.content})
+
+        response = client.chat.completions.create(
+            model=settings.openai_model,
+            messages=api_messages,
+            temperature=0.3,
+            response_format={"type": "json_object"},
+        )
+        data = json.loads(response.choices[0].message.content or "{}")
+
+        reply = data.get("reply") or data.get("message") or data.get("response") or ""
+        if not reply:
+            return _fallback_chat_response(request.messages, request.context, request.mode)
+
+        return AIChatResponse(
+            reply=reply,
+            suggested_followups=data.get("suggested_followups", [
+                "How do I write clear steps to reproduce?",
+                "What is the difference between Severity and Priority?",
+                "How can I test this fix locally?",
+            ]),
+            category=data.get("category", "QA Mentor"),
+            helpful_tips=data.get("helpful_tips", [
+                "Always separate reproduction steps into clear numbered bullets.",
+                "Include the observed HTTP status code or console error whenever applicable.",
+            ]),
+        )
+    except Exception:
+        return _fallback_chat_response(request.messages, request.context, request.mode)
+
