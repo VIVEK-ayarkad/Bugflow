@@ -62,23 +62,29 @@ From automated defect classification and semantic duplicate detection to our sig
 * **Direct Code Repair:** Submitting faulty code (e.g. `print("hell)`) outputs pure corrected code (`print("hell")`) without wrapping in unnecessary `try...catch` blocks.
 * **AST Validation:** Confirms valid code with `is_correct: true`.
 
-### 8. 📄 1-Click PDF Report Generation
+### 8. 🤖 AI Mentor & Chatbot (Multi-Domain Engineering & QA Intelligence)
+* **Interactive Guidance:** Dedicated conversational mentor to guide developers and QA engineers through bug reproduction, error diagnosis, testing, and debugging.
+* **Multi-Domain Intelligence:** Answers technical doubts across REST/HTTP status codes (500, 401, 403, 404, 422), CORS, JavaScript/React state & hooks, Python exceptions, database transactions & rollbacks, race conditions, Git PR workflows, and QA testing methodologies.
+* **Dual Access Modalities:** Available as a persistent floating assistant widget on every dashboard page and as a full-screen workstation via sidebar navigation.
+* **Context-Aware Debugging:** Pass active defect tickets or draft bug descriptions directly into the AI Mentor for instant critique and tailored remediation advice.
+
+### 9. 📄 1-Click PDF Report Generation
 * **Defect Investigation Reports:** Export complete bug metadata, reproduction steps, resolution assistance, and full comment thread as a PDF (`GET /api/issues/{id}/pdf`).
 * **Project QA Summary Reports:** Executive PDF summarizing project statistics, open defect inventories, and severity charts (`GET /api/projects/{id}/pdf`).
 
-### 9. ✏️ Full Defect Lifecycle & In-Place Editing
+### 10. ✏️ Full Defect Lifecycle & In-Place Editing
 * Modify and update defects directly from:
   * **Bug Detail Modal:** Inline **"✏️ Edit Bug"** toggle.
   * **Table View:** Dedicated **"✏️ Edit"** button in row actions.
   * **Kanban Board:** Quick **"✏️"** card action.
 
-### 10. 👤 User Profile & Account Settings
+### 11. 👤 User Profile & Account Settings
 * Click your user card in the sidebar footer to:
   * Update **Username** and **Email Address**.
   * Change **Security Password** (with current password verification).
   * View assigned role badge and membership duration.
 
-### 11. 📊 Sprints, Interactive Kanban Board & Analytics
+### 12. 📊 Sprints, Interactive Kanban Board & Analytics
 * **5-Stage Kanban Workflow:** `Open` ➔ `In Progress` ➔ `In Review` ➔ `Resolved` ➔ `Closed`.
 * **Sprint Health Analytics:** Automatic sprint risk scoring (`Low`, `Medium`, `High`, `Critical`).
 * **Visual Charts:** Interactive SVG charts for severity distributions, status breakdowns, monthly defect volume, and team workload.
@@ -260,6 +266,8 @@ OPENAI_MODEL=gpt-4o-mini
 | `GET` | `/api/issues/{id}/resolution-assistance` | Generate checklist, similar bugs & fix |
 | `POST` | `/api/ai/fix-code` | Code Doctor direct syntax & semantic repair |
 | `POST` | `/api/ai/sprint-health/{id}` | Predict sprint delivery health & risk score |
+| `POST` | `/api/ai/chat` | AI Mentor conversational Q&A and defect guidance |
+| `GET` | `/api/ai/chat/topics` | Fetch categorized starter questions & prompt topics |
 
 ---
 
