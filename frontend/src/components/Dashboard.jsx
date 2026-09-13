@@ -54,13 +54,13 @@ import {
 import { useAuth } from '../AuthContext';
 import AdminPanel from './AdminPanel';
 import BugDetailModal from './BugDetailModal';
-import CodeDoctor from './CodeDoctor';
 import IssueForm from './IssueForm';
 import NotificationDrawer from './NotificationDrawer';
 import ProfileModal from './ProfileModal';
 import SprintManager from './SprintManager';
 import ThemeToggle from './ThemeToggle';
 import AIChatbot from './AIChatbot';
+import BlastRadiusVisualizer from './BlastRadiusVisualizer';
 
 function Badge({ value }) {
   const v = value || 'open';
@@ -609,9 +609,17 @@ export default function Dashboard() {
 
   async function loadProjects() {
     try {
-      const data = await getProjects();
-      setProjects(data);
-      if (data.length && !selectedProject) setSelectedProject(data[0]);
+      let data = await getProjects();
+      if (!data || data.length === 0) {
+        try {
+          const defaultProj = await createProject({ name: 'BugFlow Workspace', description: 'Default project for software defect tracking.' });
+          data = [defaultProj];
+        } catch {
+          // ignore
+        }
+      }
+      setProjects(data || []);
+      if (data && data.length && !selectedProject) setSelectedProject(data[0]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -706,11 +714,19 @@ export default function Dashboard() {
   }
 
   async function handleCreateIssueSubmit(payload) {
-    if (!selectedProject) {
-      alert('Please create or select a project first!');
-      return;
+    let targetProjectId = selectedProject?.id;
+    if (!targetProjectId) {
+      if (projects && projects.length > 0) {
+        targetProjectId = projects[0].id;
+        setSelectedProject(projects[0]);
+      } else {
+        const newProj = await createProject({ name: 'BugFlow Workspace', description: 'Primary defect tracking workspace' });
+        setProjects([newProj]);
+        setSelectedProject(newProj);
+        targetProjectId = newProj.id;
+      }
     }
-    await createIssue(selectedProject.id, payload);
+    await createIssue(targetProjectId, payload);
     setShowNewIssue(false);
     loadIssuesAndStats();
   }
@@ -747,8 +763,8 @@ export default function Dashboard() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="brand-icon">
-            <Bot size={22} color="#ffffff" />
+          <div className="brand-icon" style={{ background: 'transparent', boxShadow: 'none' }}>
+            <img src="/logo.png" alt="BugFlow Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <div className="brand-text">
             <h2>BugFlow</h2>
@@ -785,11 +801,11 @@ export default function Dashboard() {
           <button className={`nav-item ${navTab === 'sprints' ? 'active' : ''}`} onClick={() => setNavTab('sprints')}>
             <Zap size={16} /> Sprint Board
           </button>
+          <button className={`nav-item ${navTab === 'blast_radius' ? 'active' : ''}`} onClick={() => setNavTab('blast_radius')}>
+            <Flame size={16} color="var(--accent)" /> Blast Radius Map
+          </button>
           <button className={`nav-item ${navTab === 'projects' ? 'active' : ''}`} onClick={() => setNavTab('projects')}>
             <FolderKanban size={16} /> Projects & Team
-          </button>
-          <button className={`nav-item ${navTab === 'ai_tools' ? 'active' : ''}`} onClick={() => setNavTab('ai_tools')}>
-            <Sparkles size={16} /> Code Doctor & AI
           </button>
           <button className={`nav-item ${navTab === 'chatbot' ? 'active' : ''}`} onClick={() => setNavTab('chatbot')}>
             <Bot size={16} /> AI Mentor & Chatbot
@@ -1308,7 +1324,13 @@ export default function Dashboard() {
 
           {/* TAB 3: SPRINTS */}
           {navTab === 'sprints' && (
-            <SprintManager projectId={selectedProject?.id} onRefresh={loadIssuesAndStats} />
+            <SprintManager
+              projectId={selectedProject?.id}
+              project={selectedProject}
+              issues={issues}
+              onSelectIssue={(issue) => setSelectedIssue(issue)}
+              onRefresh={loadIssuesAndStats}
+            />
           )}
 
           {/* TAB 4: PROJECTS MANAGEMENT */}
@@ -1349,8 +1371,14 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 5: AI CODE DOCTOR */}
-          {navTab === 'ai_tools' && <CodeDoctor projects={projects} onIssueCreated={loadIssuesAndStats} />}
+          {/* TAB 5: BLAST RADIUS & ARCHITECTURE MAP */}
+          {navTab === 'blast_radius' && (
+            <BlastRadiusVisualizer
+              projectId={selectedProject?.id}
+              issues={issues}
+              onSelectIssue={(issue) => setSelectedIssue(issue)}
+            />
+          )}
 
           {/* TAB 6: AI MENTOR & CHATBOT WORKSTATION */}
           {navTab === 'chatbot' && (

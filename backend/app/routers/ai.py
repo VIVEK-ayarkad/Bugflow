@@ -5,9 +5,10 @@ from app.ai import (
     assist_bug_report,
     classify_defect,
     detect_duplicates,
-    fix_code_snippet,
     generate_chat_response,
     generate_resolution_assistance,
+    generate_sprint_advisor,
+    generate_sprint_retrospective,
     get_chat_starter_topics,
     predict_severity,
     predict_sprint_health,
@@ -23,8 +24,6 @@ from app.schemas import (
     AIChatRequest,
     AIChatResponse,
     AIChatTopicsResponse,
-    CodeFixRequest,
-    CodeFixResponse,
     DefectClassifyRequest,
     DefectClassifyResponse,
     DuplicateDetectRequest,
@@ -35,7 +34,9 @@ from app.schemas import (
     SemanticSearchResponse,
     SeverityPredictRequest,
     SeverityPredictResponse,
+    SprintAdvisorResponse,
     SprintHealthResponse,
+    SprintRetrospectiveResponse,
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -119,25 +120,6 @@ def ai_detect_duplicates(
 
 
 @router.post(
-    "/fix-code",
-    response_model=CodeFixResponse,
-    summary="Code Doctor (Pure Direct Syntax & Semantic Repair)",
-    description="Diagnose code errors and generate clean, corrected code with root cause explanation and diffs.",
-    responses={
-        200: {"description": "Code fix and analysis returned", "model": CodeFixResponse},
-        401: {"description": "Unauthorized access", "model": ErrorResponse},
-        422: {"description": "Validation error", "model": ErrorResponse},
-    },
-)
-async def ai_fix_code(
-    request: CodeFixRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """Fix syntax and logic errors in code snippet."""
-    return await fix_code_snippet(request)
-
-
-@router.post(
     "/sprint-health/{sprint_id}",
     response_model=SprintHealthResponse,
     summary="Evaluate Sprint Health & Risk",
@@ -155,6 +137,46 @@ def ai_sprint_health(
 ):
     """Calculate sprint risk metrics and recommendations."""
     return predict_sprint_health(sprint_id, db)
+
+
+@router.post(
+    "/sprint-retrospective/{sprint_id}",
+    response_model=SprintRetrospectiveResponse,
+    summary="Generate AI Sprint Retrospective",
+    description="Generate structured sprint retrospective analysis, delivery highlights, bottlenecks, and action items.",
+    responses={
+        200: {"description": "Sprint retrospective analysis", "model": SprintRetrospectiveResponse},
+        401: {"description": "Unauthorized access", "model": ErrorResponse},
+        404: {"description": "Sprint not found", "model": ErrorResponse},
+    },
+)
+def ai_sprint_retrospective(
+    sprint_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate comprehensive retrospective analysis for sprint."""
+    return generate_sprint_retrospective(sprint_id, db)
+
+
+@router.post(
+    "/sprint-advisor/{sprint_id}",
+    response_model=SprintAdvisorResponse,
+    summary="AI Sprint Scope and Capacity Advisor",
+    description="Analyze sprint ticket allocation, unassigned critical tasks, and capacity risks.",
+    responses={
+        200: {"description": "Sprint advisor insights", "model": SprintAdvisorResponse},
+        401: {"description": "Unauthorized access", "model": ErrorResponse},
+        404: {"description": "Sprint not found", "model": ErrorResponse},
+    },
+)
+def ai_sprint_advisor(
+    sprint_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate sprint scope and capacity advice."""
+    return generate_sprint_advisor(sprint_id, db)
 
 
 @router.post(

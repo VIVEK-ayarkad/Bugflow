@@ -131,24 +131,24 @@ class Issue(Base):
     expected_behavior: Mapped[str | None] = mapped_column(Text, nullable=True)
     actual_behavior: Mapped[str | None] = mapped_column(Text, nullable=True)
     severity: Mapped[IssueSeverity] = mapped_column(
-        Enum(IssueSeverity), default=IssueSeverity.MEDIUM, nullable=False
+        Enum(IssueSeverity), default=IssueSeverity.MEDIUM, nullable=False, index=True
     )
     priority: Mapped[IssuePriority] = mapped_column(
-        Enum(IssuePriority), default=IssuePriority.MEDIUM, nullable=False
+        Enum(IssuePriority), default=IssuePriority.MEDIUM, nullable=False, index=True
     )
     status: Mapped[IssueStatus] = mapped_column(
-        Enum(IssueStatus), default=IssueStatus.OPEN, nullable=False
+        Enum(IssueStatus), default=IssueStatus.OPEN, nullable=False, index=True
     )
     os: Mapped[str | None] = mapped_column(String(100), nullable=True)
     browser: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     module: Mapped[str | None] = mapped_column(String(150), nullable=True)
     defect_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
-    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    assigned_developer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    sprint_id: Mapped[int | None] = mapped_column(ForeignKey("sprints.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    assigned_developer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    sprint_id: Mapped[int | None] = mapped_column(ForeignKey("sprints.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, onupdate=utc_now
     )
@@ -172,10 +172,10 @@ class Comment(Base):
     __tablename__ = "comments"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    issue_id: Mapped[int] = mapped_column(ForeignKey("issues.id"), nullable=False)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    issue_id: Mapped[int] = mapped_column(ForeignKey("issues.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, onupdate=utc_now
     )
@@ -188,8 +188,8 @@ class Attachment(Base):
     __tablename__ = "attachments"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    issue_id: Mapped[int] = mapped_column(ForeignKey("issues.id"), nullable=False)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    issue_id: Mapped[int] = mapped_column(ForeignKey("issues.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     filepath: Mapped[str] = mapped_column(String(500), nullable=False)
     file_type: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -204,12 +204,12 @@ class ActivityLog(Base):
     __tablename__ = "activity_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    issue_id: Mapped[int | None] = mapped_column(ForeignKey("issues.id"), nullable=True)
-    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    issue_id: Mapped[int | None] = mapped_column(ForeignKey("issues.id"), nullable=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
 
     issue: Mapped["Issue | None"] = relationship(back_populates="activity_logs")
     project: Mapped["Project | None"] = relationship()
@@ -220,11 +220,11 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     link: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
 
     user: Mapped["User"] = relationship(back_populates="notifications")

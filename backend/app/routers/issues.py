@@ -1,17 +1,19 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.activity import create_notification, log_activity
 from app.ai import generate_resolution_assistance
 from app.auth import get_current_user
+from app.blast_radius_service import compute_project_blast_radius
 from app.database import get_db
 from app.errors import ErrorResponse
 from app.models import ActivityLog, Issue, IssuePriority, IssueSeverity, IssueStatus, Project, Sprint, User, UserRole
 from app.pdf_service import generate_issue_pdf
 from app.schemas import (
     ActivityLogResponse,
+    BlastRadiusReport,
     IssueAssignUpdate,
     IssueCreate,
     IssueResponse,
@@ -22,6 +24,15 @@ from app.schemas import (
 )
 
 router = APIRouter(tags=["issues"])
+
+ISSUE_EAGER_LOAD = (
+    joinedload(Issue.reporter),
+    joinedload(Issue.assigned_developer),
+    joinedload(Issue.project),
+    joinedload(Issue.sprint),
+    selectinload(Issue.comments),
+    selectinload(Issue.attachments),
+)
 
 
 def _build_issue_response(issue: Issue) -> IssueResponse:
@@ -60,7 +71,7 @@ def list_all_issues(
     current_user: User = Depends(get_current_user),
 ):
     """List issues with multi-dimensional filtering."""
-    query = db.query(Issue)
+    query = db.query(Issue).options(*ISSUE_EAGER_LOAD)
 
     if project_id:
         query = query.filter(Issue.project_id == project_id)
@@ -118,8 +129,9 @@ def list_project_issues(
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project #{project_id} not found")
 
-    issues = db.query(Issue).filter(Issue.project_id == project_id).order_by(Issue.created_at.desc()).all()
+    issues = db.query(Issue).options(*ISSUE_EAGER_LOAD).filter(Issue.project_id == project_id).order_by(Issue.created_at.desc()).all()
     return [_build_issue_response(i) for i in issues]
+
 
 
 @router.post(
@@ -205,7 +217,7 @@ def get_issue(
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve an issue by ID."""
-    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    issue = db.query(Issue).options(*ISSUE_EAGER_LOAD).filter(Issue.id == issue_id).first()
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Issue #{issue_id} not found")
     return _build_issue_response(issue)
@@ -519,3 +531,28 @@ async def get_issue_resolution_assistance(
         project_id=issue.project_id,
     )
     return await generate_resolution_assistance(req, db)
+
+
+@router.get(
+    "/api/issues/{issue_id}/blast-radius",
+    response_model=BlastRadiusReport,
+    summary="Get Failure Blast Radius for a Defect",
+    description="Analyze the architectural blast radius, downstream dependency failures, and containment strategies for a specific bug.",
+    responses={
+        200: {"description": "Blast radius report for defect", "model": BlastRadiusReport},
+        404: {"description": "Issue not found", "model": ErrorResponse},
+    },
+)
+def get_issue_blast_radius(
+    issue_id: int,
+    domain: str | None = Query(default=None, description="Optional domain archetype override"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Compute specific failure blast radius for an existing issue."""
+    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Issue #{issue_id} not found")
+
+    return compute_project_blast_radius(issue.project_id, db, focused_issue_id=issue.id, domain_override=domain)
+

@@ -120,11 +120,30 @@ export default function IssueForm({
     }
   };
 
-  const handleClassify = async (desc, title = '') => {
-    if (!desc && !title) return;
+  const set = (key, val) => {
+    setForm((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const acceptSuggestion = () => {
+    if (!classification) return;
+    setForm((f) => ({
+      ...f,
+      category: classification.category || f.category,
+      module: classification.module || f.module,
+      defect_type: classification.defect_type || f.defect_type,
+      severity: classification.suggested_severity || f.severity,
+      priority: classification.suggested_priority || f.priority,
+    }));
+    setSuggestionAccepted(true);
+  };
+
+  const handleClassify = async (desc = null, title = null) => {
+    const d = desc !== null ? desc : (form.description || rawInput);
+    const t = title !== null ? title : form.title;
+    if (!d && !t) return;
     setClassifying(true);
     try {
-      const res = await aiClassifyDefect({ description: desc, title: title });
+      const res = await aiClassifyDefect({ description: d || t, title: t || d });
       setClassification(res);
       setForm((f) => ({
         ...f,
@@ -135,14 +154,16 @@ export default function IssueForm({
         priority: res.suggested_priority || f.priority,
       }));
     } catch {
-      // Non-critical, fallback will trigger if needed
+      // Non-critical background classification
     } finally {
       setClassifying(false);
     }
   };
 
-  const autoPredictSeverity = async (title, desc) => {
-    const combined = `${title || ''} ${desc || ''}`.trim();
+  const autoPredictSeverity = async (title = null, desc = null) => {
+    const t = title !== null ? title : form.title;
+    const d = desc !== null ? desc : (form.description || rawInput);
+    const combined = `${t || ''} ${d || ''}`.trim();
     if (!combined) return;
     setSeverityPredicting(true);
     try {
@@ -162,14 +183,16 @@ export default function IssueForm({
     }
   };
 
-  const handleDetectDuplicates = async (title, desc) => {
-    if (!projectId || (!title && !desc)) return;
+  const handleDetectDuplicates = async (title = null, desc = null) => {
+    const t = title !== null ? title : form.title;
+    const d = desc !== null ? desc : (form.description || rawInput);
+    if (!projectId || (!t && !d)) return;
     setDetectingDuplicates(true);
     try {
       const res = await aiDetectDuplicates({
         project_id: projectId,
-        title: title || form.title || 'Untitled Defect',
-        description: desc || form.description || '',
+        title: t || 'Untitled Defect',
+        description: d || '',
       });
       if (res && res.has_duplicates) {
         setDuplicates(res.potential_duplicates || []);
@@ -183,9 +206,9 @@ export default function IssueForm({
     }
   };
 
-  const handleAssist = async (customPrompt = null) => {
-    const textToUse = customPrompt || rawInput;
-    if (!textToUse.trim()) return;
+  const handleAiAssist = async (customPrompt = null) => {
+    const textToUse = customPrompt || rawInput || form.description || form.title;
+    if (!textToUse || !textToUse.trim()) return;
 
     setAiLoading(true);
     setError('');
@@ -196,20 +219,24 @@ export default function IssueForm({
       setAiResult(result);
       if (result.formatted_report) {
         const r = result.formatted_report;
-        const newTitle = r.title || form.title;
-        const newDesc = r.description || form.description;
+        const newTitle = r.title || form.title || textToUse;
+        const newDesc = r.description || form.description || textToUse;
         setForm((f) => ({
           ...f,
           title: newTitle,
           description: newDesc,
+          steps_to_reproduce: r.steps_to_reproduce || f.steps_to_reproduce,
+          expected_behavior: r.expected_behavior || f.expected_behavior,
+          actual_behavior: r.actual_behavior || f.actual_behavior,
           priority: r.priority || f.priority,
+          severity: r.severity || f.severity,
         }));
         autoPredictSeverity(newTitle, newDesc);
         handleClassify(newDesc, newTitle);
         handleDetectDuplicates(newTitle, newDesc);
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'AI Assist failed');
     } finally {
       setAiLoading(false);
     }
@@ -217,17 +244,37 @@ export default function IssueForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.title.trim()) {
+      setError('Please provide an issue title.');
+      return;
+    }
+    if (!form.description.trim()) {
+      setError('Please provide a description of the defect.');
+      return;
+    }
     setError('');
     setSaving(true);
     try {
       const payload = {
-        ...form,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        steps_to_reproduce: form.steps_to_reproduce ? form.steps_to_reproduce.trim() : null,
+        expected_behavior: form.expected_behavior ? form.expected_behavior.trim() : null,
+        actual_behavior: form.actual_behavior ? form.actual_behavior.trim() : null,
+        category: form.category ? form.category.trim() : null,
+        module: form.module ? form.module.trim() : null,
+        defect_type: form.defect_type ? form.defect_type.trim() : null,
+        severity: form.severity || 'medium',
+        priority: form.priority || 'medium',
+        status: form.status || 'open',
         assigned_developer_id: form.assigned_developer_id ? parseInt(form.assigned_developer_id) : null,
         sprint_id: form.sprint_id ? parseInt(form.sprint_id) : null,
+        os: form.os ? form.os.trim() : null,
+        browser: form.browser ? form.browser.trim() : null,
       };
       await onSubmit(payload);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to save issue.');
     } finally {
       setSaving(false);
     }

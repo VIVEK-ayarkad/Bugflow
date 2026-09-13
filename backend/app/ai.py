@@ -3,10 +3,11 @@ import difflib
 import json
 import math
 import re
+import time
 from typing import Any
 
-from openai import OpenAI
-from sqlalchemy.orm import Session
+from openai import AsyncOpenAI
+from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models import Issue, IssuePriority, IssueSeverity, IssueStatus, Sprint
@@ -32,8 +33,84 @@ from app.schemas import (
     SemanticSearchResponse,
     SeverityPredictRequest,
     SeverityPredictResponse,
+    SprintAdvisorResponse,
     SprintHealthResponse,
+    SprintRetrospectiveResponse,
 )
+
+
+class AICircuitBreaker:
+    """Fast circuit breaker preventing blocking timeouts when remote AI is unavailable or rate-limited."""
+
+    def __init__(self, failure_threshold: int = 2, recovery_timeout_seconds: float = 300.0):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout_seconds
+        self.failure_count = 0
+        self.last_failure_time = 0.0
+        self.state = "CLOSED"  # "CLOSED", "OPEN", "HALF_OPEN"
+
+    def is_available(self) -> bool:
+        if not settings.openai_api_key.strip():
+            return False
+        if self.state == "OPEN":
+            if time.time() - self.last_failure_time > self.recovery_timeout:
+                self.state = "HALF_OPEN"
+                return True
+            return False
+        return True
+
+    def record_success(self):
+        self.failure_count = 0
+        self.state = "CLOSED"
+
+    def record_failure(self, exception: Exception | None = None):
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+        err_str = str(exception).lower() if exception else ""
+        # Immediately trip breaker for quota, auth, or rate limit errors
+        if any(term in err_str for term in ["quota", "credit", "rate", "auth", "401", "429", "insufficient_quota"]):
+            self.state = "OPEN"
+        elif self.failure_count >= self.failure_threshold:
+            self.state = "OPEN"
+
+
+ai_circuit_breaker = AICircuitBreaker()
+
+_async_openai_client: AsyncOpenAI | None = None
+
+
+def get_async_openai_client() -> AsyncOpenAI | None:
+    global _async_openai_client
+    key = settings.openai_api_key.strip()
+    if not key:
+        return None
+    if _async_openai_client is None:
+        _async_openai_client = AsyncOpenAI(api_key=key, timeout=1.8)
+    return _async_openai_client
+
+
+# In-memory LRU/TTL Cache for Instant Responses
+_AI_CACHE: dict[str, tuple[float, Any]] = {}
+_CACHE_TTL = 3600  # 1 hour
+
+
+def _get_from_cache(key: str) -> Any | None:
+    if key in _AI_CACHE:
+        ts, val = _AI_CACHE[key]
+        if time.time() - ts < _CACHE_TTL:
+            return val
+        del _AI_CACHE[key]
+    return None
+
+
+def _set_in_cache(key: str, val: Any):
+    if len(_AI_CACHE) > 500:
+        # Prune oldest items
+        oldest_keys = sorted(_AI_CACHE.keys(), key=lambda k: _AI_CACHE[k][0])[:100]
+        for k in oldest_keys:
+            _AI_CACHE.pop(k, None)
+    _AI_CACHE[key] = (time.time(), val)
+
 
 SYSTEM_PROMPT = """You are an expert bug report copilot for BugFlow. Given a user's short or vague bug description,
 analyze it and expand it into a comprehensive, highly structured, line-by-line professional bug report.
@@ -212,13 +289,22 @@ def _fallback_response(raw: str) -> AIAssistResponse:
 
 
 async def assist_bug_report(request: AIAssistRequest) -> AIAssistResponse:
-    openai_api_key = settings.openai_api_key.strip()
-    if not openai_api_key:
+    cache_key = f"assist:{request.raw_description.strip().lower()}"
+    cached = _get_from_cache(cache_key)
+    if cached:
+        return cached
+
+    if not ai_circuit_breaker.is_available():
+        res = _fallback_response(request.raw_description)
+        _set_in_cache(cache_key, res)
+        return res
+
+    client = get_async_openai_client()
+    if not client:
         return _fallback_response(request.raw_description)
 
-    client = OpenAI(api_key=openai_api_key, timeout=5.0)
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=settings.openai_model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -231,14 +317,20 @@ async def assist_bug_report(request: AIAssistRequest) -> AIAssistResponse:
         data = json.loads(content)
         report = data.get("formatted_report") or _best_effort_report(request.raw_description)
 
-        return AIAssistResponse(
+        ai_circuit_breaker.record_success()
+        result = AIAssistResponse(
             needs_more_info=False,
             follow_up_questions=data.get("follow_up_questions", []),
             formatted_report=report,
             message="Bug report automatically enriched with detailed reproduction steps & context.",
         )
-    except Exception:
-        return _fallback_response(request.raw_description)
+        _set_in_cache(cache_key, result)
+        return result
+    except Exception as exc:
+        ai_circuit_breaker.record_failure(exc)
+        res = _fallback_response(request.raw_description)
+        _set_in_cache(cache_key, res)
+        return res
 
 
 # ── AI Severity & Priority Predictor ────────────────────────────────────────
@@ -281,11 +373,20 @@ def predict_severity_rule_based(title: str, description: str) -> SeverityPredict
 
 
 async def predict_severity(request: SeverityPredictRequest) -> SeverityPredictResponse:
-    openai_api_key = settings.openai_api_key.strip()
-    if not openai_api_key:
+    cache_key = f"sev:{(request.title or '').strip().lower()}:{request.description.strip().lower()}"
+    cached = _get_from_cache(cache_key)
+    if cached:
+        return cached
+
+    if not ai_circuit_breaker.is_available():
+        res = predict_severity_rule_based(request.title or "", request.description)
+        _set_in_cache(cache_key, res)
+        return res
+
+    client = get_async_openai_client()
+    if not client:
         return predict_severity_rule_based(request.title or "", request.description)
 
-    client = OpenAI(api_key=openai_api_key, timeout=5.0)
     try:
         sys_prompt = """You are an AI Quality Assurance Specialist for BugFlow. Analyze bug reports and predict both severity and priority (low, medium, high, critical) with clear rationale in JSON format.
 
@@ -307,7 +408,7 @@ Response:
   "rationale": "Critical system outage: complete payment failure across all users directly halts business revenue and customer transactions."
 }"""
         usr_prompt = f"Title: {request.title or ''}\nDescription: {request.description}"
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=settings.openai_model,
             messages=[
                 {"role": "system", "content": sys_prompt},
@@ -332,14 +433,20 @@ Response:
         sev_str = str(data.get("predicted_severity", "medium")).lower()
         pri_str = str(data.get("predicted_priority", "medium")).lower()
 
-        return SeverityPredictResponse(
+        ai_circuit_breaker.record_success()
+        result = SeverityPredictResponse(
             predicted_severity=sev_map.get(sev_str, IssueSeverity.MEDIUM),
             predicted_priority=pri_map.get(pri_str, IssuePriority.MEDIUM),
             confidence=float(data.get("confidence", 0.95)),
             rationale=data.get("rationale", "AI predicted severity & priority based on defect scope and user impact.")
         )
-    except Exception:
-        return predict_severity_rule_based(request.title or "", request.description)
+        _set_in_cache(cache_key, result)
+        return result
+    except Exception as exc:
+        ai_circuit_breaker.record_failure(exc)
+        res = predict_severity_rule_based(request.title or "", request.description)
+        _set_in_cache(cache_key, res)
+        return res
 
 
 # ── Similar Defect & Duplicate Bug Detector ───────────────────────────────
@@ -502,17 +609,7 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
 
 
 async def get_embedding(text: str) -> list[float]:
-    openai_api_key = settings.openai_api_key.strip()
-    if openai_api_key:
-        try:
-            client = OpenAI(api_key=openai_api_key, timeout=4.0)
-            res = client.embeddings.create(
-                input=text,
-                model="text-embedding-3-small"
-            )
-            return res.data[0].embedding
-        except Exception:
-            pass
+    """Return dense semantic vector representation instantly."""
     return build_semantic_vector(text)
 
 
@@ -521,7 +618,7 @@ async def semantic_search_defects(request: SemanticSearchRequest, db: Session) -
     if not query:
         return SemanticSearchResponse(query=query, results=[], total_found=0)
 
-    db_query = db.query(Issue)
+    db_query = db.query(Issue).options(joinedload(Issue.reporter), joinedload(Issue.assigned_developer))
     if request.project_id:
         db_query = db_query.filter(Issue.project_id == request.project_id)
 
@@ -529,22 +626,23 @@ async def semantic_search_defects(request: SemanticSearchRequest, db: Session) -
     if not issues:
         return SemanticSearchResponse(query=query, results=[], total_found=0)
 
-    query_vec = await get_embedding(query)
+    query_vec = build_semantic_vector(query)
+    q_lower = query.lower()
+    q_words = set(re.findall(r"\w{3,}", q_lower))
     results = []
 
     for issue in issues:
         doc_text = f"{issue.title}. {issue.description or ''} Category: {issue.category or ''}. Module: {issue.module or ''}"
-        doc_vec = build_semantic_vector(doc_text) if len(query_vec) == len(SEMANTIC_CLUSTERS) else await get_embedding(doc_text)
+        doc_vec = build_semantic_vector(doc_text)
         sim = cosine_similarity(query_vec, doc_vec)
 
         # Keyword match bonus
-        q_lower = query.lower()
-        if q_lower in doc_text.lower():
+        doc_lower = doc_text.lower()
+        if q_lower in doc_lower:
             sim = max(sim, 0.92)
 
         # Token overlap bonus
-        q_words = set(re.findall(r"\w{3,}", q_lower))
-        doc_words = set(re.findall(r"\w{3,}", doc_text.lower()))
+        doc_words = set(re.findall(r"\w{3,}", doc_lower))
         if q_words and doc_words:
             inter = q_words.intersection(doc_words)
             if len(inter) >= 2:
@@ -567,6 +665,16 @@ async def semantic_search_defects(request: SemanticSearchRequest, db: Session) -
                 "assigned_developer": issue.assigned_developer.username if issue.assigned_developer else None,
                 "created_at": issue.created_at.isoformat() if issue.created_at else None
             })
+
+    # Sort descending by similarity score
+    results.sort(key=lambda x: x["similarity_score"], reverse=True)
+    results = results[:request.limit]
+
+    return SemanticSearchResponse(
+        query=query,
+        results=results,
+        total_found=len(results)
+    )
 
     results.sort(key=lambda x: x["similarity_score"], reverse=True)
     selected = results[:request.limit]
@@ -738,54 +846,55 @@ async def generate_resolution_assistance(request: ResolutionAssistanceRequest, d
             "⚡ MEDIUM PRIORITY: Standard priority defect; investigate and deploy fix within standard sprint cycle."
         )
 
-    # 3. Try LLM Generation if OpenAI API Key Available
-    openai_api_key = settings.openai_api_key.strip()
-    if openai_api_key:
-        try:
-            client = OpenAI(api_key=openai_api_key, timeout=7.0)
-            system_msg = (
-                "You are an expert Principal Software Engineer and QA Resolution Assistant for BugFlow. "
-                "Synthesize resolution intelligence using the defect description, category, severity, discussion comments, "
-                "similar defects, and past historical resolutions. Return JSON with keys:\n"
-                "- investigation_areas (list of 4-5 concise, specific bullet points)\n"
-                "- previous_resolution (string describing how similar historical defects were resolved)\n"
-                "- possible_resolution (string describing the exact recommended technical code fix)\n"
-                "- severity_mitigation (string detailing triage urgency and containment steps)"
-            )
-            user_msg = (
-                f"Defect Title: {title}\n"
-                f"Description: {desc}\n"
-                f"Category: {category or 'General'}\n"
-                f"Module: {module or 'General'}\n"
-                f"Severity: {severity_raw}\n"
-                f"Discussion Comments / Error Logs: {json.dumps(comment_list)}\n"
-                f"Top Similar Defects: {json.dumps(top_similar[:3])}\n"
-                f"Historical Resolutions: {json.dumps(historical_resolutions_collected[:2])}"
-            )
+    # 3. Try LLM Generation if OpenAI API Key Available and Circuit Closed
+    if ai_circuit_breaker.is_available():
+        client = get_async_openai_client()
+        if client:
+            try:
+                system_msg = (
+                    "You are an expert Principal Software Engineer and QA Resolution Assistant for BugFlow. "
+                    "Synthesize resolution intelligence using the defect description, category, severity, discussion comments, "
+                    "similar defects, and past historical resolutions. Return JSON with keys:\n"
+                    "- investigation_areas (list of 4-5 concise, specific bullet points)\n"
+                    "- previous_resolution (string describing how similar historical defects were resolved)\n"
+                    "- possible_resolution (string describing the exact recommended technical code fix)\n"
+                    "- severity_mitigation (string detailing triage urgency and containment steps)"
+                )
+                user_msg = (
+                    f"Defect Title: {title}\n"
+                    f"Description: {desc}\n"
+                    f"Category: {category or 'General'}\n"
+                    f"Module: {module or 'General'}\n"
+                    f"Severity: {severity_raw}\n"
+                    f"Discussion Comments / Error Logs: {json.dumps(comment_list)}\n"
+                    f"Top Similar Defects: {json.dumps(top_similar[:3])}\n"
+                    f"Historical Resolutions: {json.dumps(historical_resolutions_collected[:2])}"
+                )
 
-            chat_resp = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": user_msg}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2
-            )
-            raw = chat_resp.choices[0].message.content
-            parsed = json.loads(raw)
-            return ResolutionAssistanceResponse(
-                investigation_areas=parsed.get("investigation_areas", []),
-                similar_defects=top_similar,
-                historical_resolutions=top_historical,
-                previous_resolution=historical_resolution_summary or parsed.get("previous_resolution"),
-                possible_resolution=parsed.get("possible_resolution", ""),
-                severity_mitigation=parsed.get("severity_mitigation", severity_mitigation),
-                context_signals_used=signals_used,
-                confidence=0.98
-            )
-        except Exception:
-            pass
+                chat_resp = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": user_msg}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.2
+                )
+                raw = chat_resp.choices[0].message.content
+                parsed = json.loads(raw)
+                ai_circuit_breaker.record_success()
+                return ResolutionAssistanceResponse(
+                    investigation_areas=parsed.get("investigation_areas", []),
+                    similar_defects=top_similar,
+                    historical_resolutions=top_historical,
+                    previous_resolution=historical_resolution_summary or parsed.get("previous_resolution"),
+                    possible_resolution=parsed.get("possible_resolution", ""),
+                    severity_mitigation=parsed.get("severity_mitigation", severity_mitigation),
+                    context_signals_used=signals_used,
+                    confidence=0.98
+                )
+            except Exception as exc:
+                ai_circuit_breaker.record_failure(exc)
 
     # 4. Deterministic Domain Expert Engine Grounded in All 6 Signals
     # Inspect comments for runtime error clues
@@ -982,8 +1091,180 @@ def predict_sprint_health(sprint_id: int, db: Session) -> SprintHealthResponse:
         open_issues_count=len(open_issues),
         resolved_issues_count=len(resolved_issues),
         critical_issues_count=len(critical_issues),
-        recommendations=recommendations
+        recommendations=recommendations,
+    )
 
+
+# ── Sprint Retrospective Generator ───────────────────────────────────────────
+
+def generate_sprint_retrospective(sprint_id: int, db: Session) -> SprintRetrospectiveResponse:
+    sprint = db.query(Sprint).filter(Sprint.id == sprint_id).first()
+    if not sprint:
+        return SprintRetrospectiveResponse(
+            sprint_id=sprint_id,
+            sprint_name="Unknown Sprint",
+            velocity_score=50,
+            completion_rate=0.0,
+            summary="Sprint not found.",
+            highlights=[],
+            blockers=["Sprint record missing."],
+            risk_drivers=[],
+            action_items=["Verify sprint identifier and recreate milestone if needed."],
+        )
+
+    issues = sprint.issues
+    total = len(issues)
+    if total == 0:
+        return SprintRetrospectiveResponse(
+            sprint_id=sprint.id,
+            sprint_name=sprint.name,
+            velocity_score=100,
+            completion_rate=1.0,
+            summary=f"Sprint '{sprint.name}' completed with an empty milestone scope.",
+            highlights=["Zero defects reported in milestone scope."],
+            blockers=[],
+            risk_drivers=[],
+            action_items=["Plan tickets for the next sprint cycle."],
+        )
+
+    resolved_issues = [i for i in issues if i.status in [IssueStatus.RESOLVED, IssueStatus.CLOSED]]
+    open_issues = [i for i in issues if i.status in [IssueStatus.OPEN, IssueStatus.IN_PROGRESS, IssueStatus.IN_REVIEW]]
+    critical_resolved = [i for i in resolved_issues if i.severity == IssueSeverity.CRITICAL or i.priority == IssuePriority.CRITICAL]
+    critical_unresolved = [i for i in open_issues if i.severity == IssueSeverity.CRITICAL or i.priority == IssuePriority.CRITICAL]
+
+    completion_rate = round(len(resolved_issues) / total, 2)
+    velocity_score = int(completion_rate * 70 + (30 if len(critical_unresolved) == 0 else 10))
+    if velocity_score > 100:
+        velocity_score = 100
+
+    highlights = []
+    if len(resolved_issues) > 0:
+        highlights.append(f"🎉 Successfully shipped and resolved {len(resolved_issues)} defect(s) ({int(completion_rate * 100)}% completion rate).")
+    if len(critical_resolved) > 0:
+        highlights.append(f"🛡️ Hardened platform stability by closing {len(critical_resolved)} critical vulnerability / outage issue(s).")
+    
+    # Categorical breakdown
+    modules_fixed = set(i.module for i in resolved_issues if i.module)
+    if modules_fixed:
+        highlights.append(f"📦 Stabilized core subsystem modules: {', '.join(list(modules_fixed)[:3])}.")
+
+    blockers = []
+    if len(critical_unresolved) > 0:
+        blockers.append(f"🚨 {len(critical_unresolved)} critical bug(s) remain open and require immediate rollover triage.")
+    in_review_cnt = sum(1 for i in open_issues if i.status == IssueStatus.IN_REVIEW)
+    if in_review_cnt > 0:
+        blockers.append(f"⏳ {in_review_cnt} ticket(s) remained queued in review stage at sprint closure.")
+    if len(open_issues) > len(resolved_issues):
+        blockers.append(f"⚠️ Scope over-commitment: {len(open_issues)} incomplete tasks out of {total} total committed items.")
+
+    risk_drivers = []
+    # Workload skew
+    dev_counts: dict[str, int] = {}
+    for i in issues:
+        dev_name = i.assigned_developer.username if i.assigned_developer else "Unassigned"
+        dev_counts[dev_name] = dev_counts.get(dev_name, 0) + 1
+    
+    max_dev, max_count = max(dev_counts.items(), key=lambda x: x[1]) if dev_counts else ("None", 0)
+    if max_count > total * 0.5 and total > 2:
+        risk_drivers.append(f"Workload concentration: Developer '{max_dev}' held {max_count}/{total} ({int(max_count/total*100)}%) of all sprint issues.")
+    if "Unassigned" in dev_counts and dev_counts["Unassigned"] > 0:
+        risk_drivers.append(f"{dev_counts['Unassigned']} issue(s) remained unassigned throughout the sprint.")
+
+    action_items = []
+    if len(critical_unresolved) > 0:
+        action_items.append("Immediate: Prioritize rollover of unresolved critical tickets into Sprint backlog with top urgency.")
+    if completion_rate < 0.7:
+        action_items.append("Planning: Adjust team commitment capacity down by 15-20% for the upcoming sprint to prevent spillover.")
+    else:
+        action_items.append("Velocity: Maintain current velocity rhythm and review opportunities for automated integration testing.")
+    action_items.append("Process: Conduct short 15-minute async retrospective check with assigned developers.")
+
+    summary = (
+        f"Sprint '{sprint.name}' completed with a velocity score of {velocity_score}/100. "
+        f"The team delivered {len(resolved_issues)} of {total} committed items ({int(completion_rate * 100)}% delivery rate). "
+        f"{'Platform stability is high with all critical issues addressed.' if len(critical_unresolved) == 0 else f'Attention required on {len(critical_unresolved)} critical open defects.'}"
+    )
+
+    return SprintRetrospectiveResponse(
+        sprint_id=sprint.id,
+        sprint_name=sprint.name,
+        velocity_score=velocity_score,
+        completion_rate=completion_rate,
+        summary=summary,
+        highlights=highlights,
+        blockers=blockers,
+        risk_drivers=risk_drivers,
+        action_items=action_items,
+    )
+
+
+# ── Sprint Scope & Capacity Advisor ───────────────────────────────────────────
+
+def generate_sprint_advisor(sprint_id: int, db: Session) -> SprintAdvisorResponse:
+    sprint = db.query(Sprint).filter(Sprint.id == sprint_id).first()
+    if not sprint:
+        return SprintAdvisorResponse(
+            sprint_id=sprint_id,
+            sprint_name="Unknown Sprint",
+            capacity_status="Balanced",
+            risk_level="Low",
+            recommendations=["Sprint not found."],
+            unassigned_critical_count=0,
+            workload_skew_warning=None,
+        )
+
+    issues = sprint.issues
+    total = len(issues)
+    unassigned_critical = sum(
+        1 for i in issues 
+        if i.assigned_developer_id is None 
+        and (i.severity == IssueSeverity.CRITICAL or i.priority == IssuePriority.CRITICAL)
+        and i.status not in [IssueStatus.RESOLVED, IssueStatus.CLOSED]
+    )
+
+    # Developer count & workload balance
+    dev_counts: dict[str, int] = {}
+    for i in issues:
+        dev_name = i.assigned_developer.username if i.assigned_developer else "Unassigned"
+        dev_counts[dev_name] = dev_counts.get(dev_name, 0) + 1
+
+    skew_warning = None
+    if dev_counts and total >= 3:
+        for dev, cnt in dev_counts.items():
+            if dev != "Unassigned" and cnt > total * 0.55:
+                skew_warning = f"Developer '{dev}' is assigned {cnt}/{total} ({int(cnt/total*100)}%) of tickets in this sprint."
+
+    # Capacity evaluation
+    if total > 15:
+        capacity_status = "Overloaded"
+        risk_level = "High"
+    elif total < 3:
+        capacity_status = "Underutilized"
+        risk_level = "Low"
+    else:
+        capacity_status = "Balanced"
+        risk_level = "Medium" if unassigned_critical > 0 or skew_warning else "Low"
+
+    recs = []
+    if unassigned_critical > 0:
+        recs.append(f"⚠️ {unassigned_critical} critical bug(s) lack an assigned developer. Assign immediately to prevent sprint failure.")
+    if skew_warning:
+        recs.append(f"⚖️ Rebalance ticket distribution: {skew_warning}")
+    if capacity_status == "Overloaded":
+        recs.append("📉 Sprint backlog exceeds recommended concurrency. Consider moving non-critical defects back to project backlog.")
+    elif capacity_status == "Underutilized":
+        recs.append("📈 Team capacity is open. Pull top-priority tickets from project backlog into this sprint.")
+    else:
+        recs.append("✅ Sprint scope is well balanced with sustainable workload distribution.")
+
+    return SprintAdvisorResponse(
+        sprint_id=sprint.id,
+        sprint_name=sprint.name,
+        capacity_status=capacity_status,
+        risk_level=risk_level,
+        recommendations=recs,
+        unassigned_critical_count=unassigned_critical,
+        workload_skew_warning=skew_warning,
     )
 
 
@@ -1514,11 +1795,20 @@ def _diagnose_and_fix_code(code: str, language: str = "python", error_log: str =
 
 
 async def fix_code_snippet(request: CodeFixRequest) -> CodeFixResponse:
-    openai_api_key = settings.openai_api_key.strip()
-    if not openai_api_key:
+    cache_key = f"codefix:{hash(request.code)}:{request.language}:{request.audit_profile}"
+    cached = _get_from_cache(cache_key)
+    if cached:
+        return cached
+
+    if not ai_circuit_breaker.is_available():
+        res = _diagnose_and_fix_code(request.code, request.language, request.error_log, request.audit_profile)
+        _set_in_cache(cache_key, res)
+        return res
+
+    client = get_async_openai_client()
+    if not client:
         return _diagnose_and_fix_code(request.code, request.language, request.error_log, request.audit_profile)
 
-    client = OpenAI(api_key=openai_api_key, timeout=7.0)
     try:
         system_prompt = """You are a Principal Software Engineer and AI Code Doctor at Google/Amazon level.
 Analyze the user's code snippet across all architectural dimensions:
@@ -1549,7 +1839,7 @@ JSON Schema:
   "resilience_patterns": ["Circuit Breaker", "Exponential Backoff"]
 }"""
         user_prompt = f"Audit Profile: {request.audit_profile}\nLanguage: {request.language}\nError Log: {request.error_log}\nCode:\n{request.code}"
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=settings.openai_model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -1568,6 +1858,28 @@ JSON Schema:
             is_correct = True
 
         diff_lines = _generate_unified_diff(request.code, corrected_code)
+        ai_circuit_breaker.record_success()
+        result = CodeFixResponse(
+            is_correct=is_correct,
+            user_mistake=data.get("user_mistake"),
+            root_cause=data.get("root_cause", "Analysis completed."),
+            explanation=data.get("explanation", "Code analyzed and optimized."),
+            corrected_code=corrected_code,
+            prevention_tip=data.get("prevention_tip", "Validate boundaries and error handling."),
+            security_findings=data.get("security_findings", []),
+            complexity_analysis=data.get("complexity_analysis"),
+            concurrency_risks=data.get("concurrency_risks", []),
+            generated_unit_tests=data.get("generated_unit_tests", ""),
+            resilience_patterns=data.get("resilience_patterns", ["Input Validation", "Defensive Fallback"]),
+            diff=diff_lines,
+        )
+        _set_in_cache(cache_key, result)
+        return result
+    except Exception as exc:
+        ai_circuit_breaker.record_failure(exc)
+        res = _diagnose_and_fix_code(request.code, request.language, request.error_log, request.audit_profile)
+        _set_in_cache(cache_key, res)
+        return res
         ast_valid = _verify_ast_compilation(corrected_code, request.language)
 
         return CodeFixResponse(
@@ -1707,10 +2019,20 @@ def _fallback_defect_classification(description: str, title: str = "") -> Defect
 
 async def classify_defect(request: DefectClassifyRequest) -> DefectClassifyResponse:
     openai_api_key = settings.openai_api_key.strip()
-    if not openai_api_key:
+    cache_key = f"classify:{(request.title or '').strip().lower()}:{request.description.strip().lower()}"
+    cached = _get_from_cache(cache_key)
+    if cached:
+        return cached
+
+    if not ai_circuit_breaker.is_available():
+        res = _fallback_defect_classification(request.description, request.title or "")
+        _set_in_cache(cache_key, res)
+        return res
+
+    client = get_async_openai_client()
+    if not client:
         return _fallback_defect_classification(request.description, request.title or "")
 
-    client = OpenAI(api_key=openai_api_key, timeout=5.0)
     try:
         system_prompt = """You are an expert QA Engineer and Defect Classification AI for BugFlow.
 Given a defect title and description, perform intelligent classification and return pure JSON:
@@ -1740,7 +2062,7 @@ Response:
   "tags": ["payment", "checkout", "crash"]
 }"""
         user_prompt = f"Title: {request.title or ''}\nDescription: {request.description}"
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=settings.openai_model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -1763,6 +2085,25 @@ Response:
             "high": IssuePriority.HIGH,
             "critical": IssuePriority.CRITICAL,
         }
+
+        ai_circuit_breaker.record_success()
+        result = DefectClassifyResponse(
+            category=data.get("category", "General"),
+            module=data.get("module", "Core Module"),
+            defect_type=data.get("defect_type", "Functional Defect"),
+            suggested_severity=sev_map.get(str(data.get("suggested_severity", "medium")).lower(), IssueSeverity.MEDIUM),
+            suggested_priority=pri_map.get(str(data.get("suggested_priority", "medium")).lower(), IssuePriority.MEDIUM),
+            confidence=float(data.get("confidence", 0.95)),
+            rationale=data.get("rationale", "Classification derived from defect semantics and user impact."),
+            tags=data.get("tags", []),
+        )
+        _set_in_cache(cache_key, result)
+        return result
+    except Exception as exc:
+        ai_circuit_breaker.record_failure(exc)
+        res = _fallback_defect_classification(request.description, request.title or "")
+        _set_in_cache(cache_key, res)
+        return res
 
         sev_val = str(data.get("suggested_severity", "high")).lower()
         pri_val = str(data.get("suggested_priority", "high")).lower()
@@ -2590,7 +2931,7 @@ When you are assigned a bug or need to solve a software defect, follow this prov
                 "How do I write a regression test in pytest or Jest?",
                 "How do I use breakpoint debuggers in Chrome / VS Code?",
                 "What is Root Cause Analysis (RCA)?",
-                "How to use BugFlow's Code Doctor to audit my fix?",
+                "How to use Resolution Assistance to investigate a bug?",
             ],
             category="Debugging 101",
             helpful_tips=[
@@ -2947,7 +3288,7 @@ git push
         )
 
     # 13. BugFlow Features & Platform Guide
-    if _has_kw(lowered, "bugflow", "sprint board", "code doctor", "how to use", "feature"):
+    if _has_kw(lowered, "bugflow", "sprint board", "how to use", "feature"):
         return AIChatResponse(
             reply="""### 🚀 BugFlow Features & Platform Guide
 
@@ -2967,16 +3308,14 @@ BugFlow is built to streamline defect tracking, sprint velocity, and AI-assisted
 3. **Sprint Board & Milestone Health**:
    - Organize issues into active sprints.
    - Evaluates sprint health scores and risk mitigations.
-4. **Code Doctor**:
-   - Audit code snippets for CWE vulnerabilities, performance bottlenecks, and race conditions with direct auto-generated diff repairs.
-5. **Resolution Assistance Copilot**:
+4. **Resolution Assistance Copilot**:
    - Inside Bug Detail Modal, provides developer diagnostic checklists and matching historical resolutions.
-6. **Executive PDF Reports**:
+5. **Executive PDF Reports**:
    - Export official single-defect reports or project QA summaries in PDF format.
 """,
             suggested_followups=[
                 "How do I create a new project and add team members?",
-                "How does BugFlow's Code Doctor fix syntax and logic errors?",
+                "How do I use Resolution Assistance for an issue?",
                 "How do I download a Defect Report PDF?",
             ],
             category="BugFlow Guide",
@@ -3038,14 +3377,23 @@ Feel free to ask a specific follow-up question or paste any error logs / code sn
 
 
 async def generate_chat_response(request: AIChatRequest) -> AIChatResponse:
-    """Generate educational, beginner-friendly AI chat response with OpenAI and local fallback."""
-    openai_api_key = settings.openai_api_key
-    if not openai_api_key:
+    """Generate educational, beginner-friendly AI chat response with non-blocking AsyncOpenAI and instant local fallback."""
+    last_user_msg = request.messages[-1].content if request.messages else ""
+    cache_key = f"chat:{request.mode}:{last_user_msg.strip().lower()}"
+    cached = _get_from_cache(cache_key)
+    if cached:
+        return cached
+
+    if not ai_circuit_breaker.is_available():
+        res = _fallback_chat_response(request.messages, request.context, request.mode)
+        _set_in_cache(cache_key, res)
+        return res
+
+    client = get_async_openai_client()
+    if not client:
         return _fallback_chat_response(request.messages, request.context, request.mode)
 
     try:
-        client = OpenAI(api_key=openai_api_key, timeout=3.5)
-
         # Build message history for OpenAI
         api_messages = [{"role": "system", "content": CHAT_MENTOR_SYSTEM_PROMPT}]
 
@@ -3060,7 +3408,7 @@ async def generate_chat_response(request: AIChatRequest) -> AIChatResponse:
         for m in request.messages[-10:]:  # Keep recent 10 messages for context
             api_messages.append({"role": m.role, "content": m.content})
 
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=settings.openai_model,
             messages=api_messages,
             temperature=0.3,
@@ -3072,7 +3420,8 @@ async def generate_chat_response(request: AIChatRequest) -> AIChatResponse:
         if not reply:
             return _fallback_chat_response(request.messages, request.context, request.mode)
 
-        return AIChatResponse(
+        ai_circuit_breaker.record_success()
+        result = AIChatResponse(
             reply=reply,
             suggested_followups=data.get("suggested_followups", [
                 "How do I write clear steps to reproduce?",
@@ -3085,6 +3434,11 @@ async def generate_chat_response(request: AIChatRequest) -> AIChatResponse:
                 "Include the observed HTTP status code or console error whenever applicable.",
             ]),
         )
-    except Exception:
-        return _fallback_chat_response(request.messages, request.context, request.mode)
+        _set_in_cache(cache_key, result)
+        return result
+    except Exception as exc:
+        ai_circuit_breaker.record_failure(exc)
+        res = _fallback_chat_response(request.messages, request.context, request.mode)
+        _set_in_cache(cache_key, res)
+        return res
 

@@ -12,7 +12,7 @@ import {
   Download,
   Lightbulb,
 } from 'lucide-react';
-import { sendAIChat } from '../api';
+import { getAIChatTopics, sendAIChat } from '../api';
 
 export default function AIChatbot({
   mode = 'widget', // 'widget' | 'fullscreen'
@@ -21,6 +21,7 @@ export default function AIChatbot({
 }) {
   const [isOpen, setIsOpen] = useState(mode === 'fullscreen');
   const [isMinimized, setIsMinimized] = useState(false);
+  const [categories, setCategories] = useState([]);
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -45,6 +46,10 @@ export default function AIChatbot({
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+
+  useEffect(() => {
+    loadStarterTopics();
+  }, []);
 
   useEffect(() => {
     if (initialContext) {

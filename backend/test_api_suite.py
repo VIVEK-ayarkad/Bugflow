@@ -65,6 +65,7 @@ def test_api_suite():
     })
     assert_test(reg_admin.status_code == 201, "POST /api/auth/register creates user (HTTP 201)")
     admin_token = reg_admin.json().get("access_token")
+    admin_id = reg_admin.json()["user"]["id"]
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
     # Register developer
@@ -169,6 +170,10 @@ def test_api_suite():
     start_sp = client.post(f"/api/sprints/{sprint_id}/start", headers=admin_headers)
     assert_test(start_sp.status_code == 200 and start_sp.json()["status"] == "active", "POST /api/sprints/{id}/start")
 
+    # Sprint Metrics & Burndown calculation
+    sp_metrics = client.get(f"/api/sprints/{sprint_id}/metrics", headers=admin_headers)
+    assert_test(sp_metrics.status_code == 200 and "burndown" in sp_metrics.json() and "workload" in sp_metrics.json(), "GET /api/sprints/{id}/metrics (burndown & workload)")
+
     # ── 5. Issues, Comments, Attachments, PDF ────────────────────────────────
     print("\n🐛 [5/7] Testing Issues, Comments, Attachments, and PDFs...")
     issue_payload = {
@@ -226,6 +231,25 @@ def test_api_suite():
     res_assist = client.get(f"/api/issues/{issue_id}/resolution-assistance", headers=admin_headers)
     assert_test(res_assist.status_code == 200 and "investigation_areas" in res_assist.json(), "GET /api/issues/{id}/resolution-assistance")
 
+    # Blast Radius Intelligence Endpoints
+    proj_blast = client.get(f"/api/projects/{project_id}/blast-radius", headers=admin_headers)
+    assert_test(
+        proj_blast.status_code == 200
+        and len(proj_blast.json().get("nodes", [])) >= 8
+        and "system_blast_score" in proj_blast.json()
+        and "containment_strategies" in proj_blast.json(),
+        "GET /api/projects/{id}/blast-radius (system dependency graph & cascade report)"
+    )
+
+    issue_blast = client.get(f"/api/issues/{issue_id}/blast-radius", headers=admin_headers)
+    assert_test(
+        issue_blast.status_code == 200
+        and issue_blast.json().get("epicenter_module") is not None
+        and "direct_impact_modules" in issue_blast.json()
+        and "cascade_risk_modules" in issue_blast.json(),
+        "GET /api/issues/{id}/blast-radius (issue-focused blast radius & cascade risks)"
+    )
+
     # ── 6. Dashboard, Notifications & Admin ──────────────────────────────────
     print("\n📊 [6/7] Testing Dashboard, Notifications & Admin Reports...")
     dash_stats = client.get(f"/api/dashboard/stats?project_id={project_id}", headers=admin_headers)
@@ -271,14 +295,21 @@ def test_api_suite():
     }, headers=admin_headers)
     assert_test(dup_res.status_code == 200 and "has_duplicates" in dup_res.json(), "POST /api/ai/detect-duplicates")
 
-    fix_res = client.post("/api/ai/fix-code", json={
-        "code": "print('hello world",
-        "language": "python"
-    }, headers=admin_headers)
-    assert_test(fix_res.status_code == 200 and "corrected_code" in fix_res.json(), "POST /api/ai/fix-code (Code Doctor syntax repair)")
-
     sprint_h = client.post(f"/api/ai/sprint-health/{sprint_id}", headers=admin_headers)
     assert_test(sprint_h.status_code == 200 and "health_score" in sprint_h.json(), "POST /api/ai/sprint-health/{id}")
+
+    sprint_retro = client.post(f"/api/ai/sprint-retrospective/{sprint_id}", headers=admin_headers)
+    assert_test(sprint_retro.status_code == 200 and "velocity_score" in sprint_retro.json() and "action_items" in sprint_retro.json(), "POST /api/ai/sprint-retrospective/{id}")
+
+    sprint_adv = client.post(f"/api/ai/sprint-advisor/{sprint_id}", headers=admin_headers)
+    assert_test(sprint_adv.status_code == 200 and "capacity_status" in sprint_adv.json(), "POST /api/ai/sprint-advisor/{id}")
+
+    # Test Sprint Bulk Assign
+    bulk_res = client.post(f"/api/sprints/{sprint_id}/issues/bulk-assign", json={
+        "issue_ids": [issue_id],
+        "action": "add"
+    }, headers=admin_headers)
+    assert_test(bulk_res.status_code == 200 and bulk_res.json()["success"] is True, "POST /api/sprints/{id}/issues/bulk-assign")
 
     sem_res = client.post("/api/ai/semantic-search", json={
         "query": "card charge fails on submit",
@@ -318,6 +349,65 @@ def test_api_suite():
     }, headers=admin_headers)
     assert_test(chat_err_res.status_code == 200 and "500" in chat_err_res.json().get("reply", ""), "POST /api/ai/chat (error explanation mode)")
 
+    # ── Automated Test Teardown Cleanup ───────────────────────────────────────
+    try:
+        from app.database import SessionLocal
+        from app.models import ActivityLog, Attachment, Comment, Issue, Notification, Project, ProjectMember, Sprint, User
+        db = SessionLocal()
+        if "project_id" in locals() and project_id:
+            sub_issues = db.query(Issue.id).filter(Issue.project_id == project_id).all()
+            sub_issue_ids = [i[0] for i in sub_issues]
+            if sub_issue_ids:
+                db.query(Comment).filter(Comment.issue_id.in_(sub_issue_ids)).delete(synchronize_session=False)
+                db.query(Attachment).filter(Attachment.issue_id.in_(sub_issue_ids)).delete(synchronize_session=False)
+                db.query(ActivityLog).filter(ActivityLog.issue_id.in_(sub_issue_ids)).delete(synchronize_session=False)
+                db.query(Issue).filter(Issue.id.in_(sub_issue_ids)).delete(synchronize_session=False)
+            db.query(Sprint).filter(Sprint.project_id == project_id).delete(synchronize_session=False)
+            db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete(synchronize_session=False)
+            db.query(ActivityLog).filter(ActivityLog.project_id == project_id).delete(synchronize_session=False)
+            db.query(Project).filter(Project.id == project_id).delete(synchronize_session=False)
+
+        # Find all test user IDs
+        stray_users = db.query(User.id).filter(User.email.like("%@bugflow.dev")).all()
+        all_test_uids = list(set([u[0] for u in stray_users] + ([admin_id] if "admin_id" in locals() and admin_id else []) + ([dev_id] if "dev_id" in locals() and dev_id else [])))
+        if all_test_uids:
+            # Delete any projects owned by test users
+            user_projects = db.query(Project.id).filter(Project.owner_id.in_(all_test_uids)).all()
+            user_proj_ids = [p[0] for p in user_projects]
+            if user_proj_ids:
+                p_issues = db.query(Issue.id).filter(Issue.project_id.in_(user_proj_ids)).all()
+                p_issue_ids = [i[0] for i in p_issues]
+                if p_issue_ids:
+                    db.query(Comment).filter(Comment.issue_id.in_(p_issue_ids)).delete(synchronize_session=False)
+                    db.query(Attachment).filter(Attachment.issue_id.in_(p_issue_ids)).delete(synchronize_session=False)
+                    db.query(ActivityLog).filter(ActivityLog.issue_id.in_(p_issue_ids)).delete(synchronize_session=False)
+                    db.query(Issue).filter(Issue.id.in_(p_issue_ids)).delete(synchronize_session=False)
+                db.query(Sprint).filter(Sprint.project_id.in_(user_proj_ids)).delete(synchronize_session=False)
+                db.query(ProjectMember).filter(ProjectMember.project_id.in_(user_proj_ids)).delete(synchronize_session=False)
+                db.query(ActivityLog).filter(ActivityLog.project_id.in_(user_proj_ids)).delete(synchronize_session=False)
+                db.query(Project).filter(Project.id.in_(user_proj_ids)).delete(synchronize_session=False)
+
+            # Clean any remaining issues reported by test users
+            rep_issues = db.query(Issue.id).filter(Issue.reporter_id.in_(all_test_uids)).all()
+            rep_issue_ids = [i[0] for i in rep_issues]
+            if rep_issue_ids:
+                db.query(Comment).filter(Comment.issue_id.in_(rep_issue_ids)).delete(synchronize_session=False)
+                db.query(Attachment).filter(Attachment.issue_id.in_(rep_issue_ids)).delete(synchronize_session=False)
+                db.query(ActivityLog).filter(ActivityLog.issue_id.in_(rep_issue_ids)).delete(synchronize_session=False)
+                db.query(Issue).filter(Issue.id.in_(rep_issue_ids)).delete(synchronize_session=False)
+
+            db.query(Issue).filter(Issue.assigned_developer_id.in_(all_test_uids)).update({"assigned_developer_id": None}, synchronize_session=False)
+            db.query(Notification).filter(Notification.user_id.in_(all_test_uids)).delete(synchronize_session=False)
+            db.query(ActivityLog).filter(ActivityLog.user_id.in_(all_test_uids)).delete(synchronize_session=False)
+            db.query(ProjectMember).filter(ProjectMember.user_id.in_(all_test_uids)).delete(synchronize_session=False)
+            db.query(Comment).filter(Comment.user_id.in_(all_test_uids)).delete(synchronize_session=False)
+            db.query(User).filter(User.id.in_(all_test_uids)).delete(synchronize_session=False)
+
+        db.commit()
+        db.close()
+    except Exception as teardown_err:
+        print(f"  ℹ️ Teardown note: {teardown_err}")
+
     print("\n=======================================================")
     print(f"📊 Verification Summary: {passed} PASSED, {failed} FAILED")
     print("=======================================================")
@@ -325,6 +415,8 @@ def test_api_suite():
     if failed > 0:
         sys.exit(1)
 
+
 if __name__ == "__main__":
     test_api_suite()
+
 

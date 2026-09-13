@@ -1,14 +1,34 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import settings
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+is_sqlite = settings.database_url.startswith("sqlite")
+connect_args = {"check_same_thread": False} if is_sqlite else {}
+
+engine_kwargs = {"connect_args": connect_args}
+if not is_sqlite:
+    engine_kwargs.update({
+        "pool_size": 20,
+        "max_overflow": 10,
+        "pool_pre_ping": True,
+        "pool_recycle": 3600,
+    })
 
 engine = create_engine(
     settings.database_url,
-    connect_args=connect_args,
+    **engine_kwargs,
 )
+
+if is_sqlite:
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA cache_size=-64000")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -22,3 +42,4 @@ def get_db():
         yield db
     finally:
         db.close()
+

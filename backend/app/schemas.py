@@ -149,6 +149,40 @@ class SprintResponse(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
 
 
+class SprintCompleteRequest(BaseModel):
+    action: str = Field(default="backlog", description="Action for remaining issues: 'backlog' or 'rollover'", examples=["backlog"])
+    rollover_sprint_id: int | None = Field(default=None, description="Target sprint ID if action is 'rollover'")
+
+
+class SprintBulkAssignRequest(BaseModel):
+    issue_ids: list[int] = Field(..., min_length=1, description="List of issue IDs to assign or unassign")
+    action: str = Field(default="add", description="Action: 'add' (to this sprint) or 'remove' (to backlog)", examples=["add"])
+
+
+class SprintMetricsResponse(BaseModel):
+    sprint_id: int = Field(..., description="Sprint ID")
+    sprint_name: str = Field(..., description="Sprint Name")
+    status: SprintStatus = Field(..., description="Sprint status")
+    start_date: datetime | None = Field(None, description="Start date")
+    end_date: datetime | None = Field(None, description="End date")
+    goal: str | None = Field(None, description="Sprint goal")
+    total_issues: int = Field(0, description="Total issues count in sprint")
+    open_issues: int = Field(0, description="Open issues count")
+    in_progress_issues: int = Field(0, description="In progress count")
+    in_review_issues: int = Field(0, description="In review count")
+    resolved_issues: int = Field(0, description="Resolved count")
+    closed_issues: int = Field(0, description="Closed count")
+    critical_issues: int = Field(0, description="Critical issues count")
+    high_issues: int = Field(0, description="High severity count")
+    medium_issues: int = Field(0, description="Medium severity count")
+    low_issues: int = Field(0, description="Low severity count")
+    completion_rate: float = Field(0.0, description="Ratio of resolved/closed issues")
+    days_total: int | None = Field(None, description="Total days in sprint cycle")
+    days_remaining: int | None = Field(None, description="Remaining days until end date")
+    workload: list[dict[str, Any]] = Field(default_factory=list, description="Developer workload distribution")
+    burndown: list[dict[str, Any]] = Field(default_factory=list, description="Burndown daily progression points")
+
+
 # ── Comments & Attachments ────────────────────────────────────────────────────
 
 class CommentCreate(BaseModel):
@@ -379,6 +413,28 @@ class SprintHealthResponse(BaseModel):
     recommendations: list[str] = Field(default_factory=list, description="Actionable recommendations to ensure sprint success")
 
 
+class SprintRetrospectiveResponse(BaseModel):
+    sprint_id: int = Field(..., description="Sprint ID")
+    sprint_name: str = Field(..., description="Sprint Name")
+    velocity_score: int = Field(..., ge=0, le=100, description="Sprint velocity & delivery score (0-100)")
+    completion_rate: float = Field(..., description="Issue completion percentage ratio")
+    summary: str = Field(..., description="Executive sprint retrospective summary")
+    highlights: list[str] = Field(default_factory=list, description="Sprint achievements and successes")
+    blockers: list[str] = Field(default_factory=list, description="Encountered bottlenecks and unresolved issues")
+    risk_drivers: list[str] = Field(default_factory=list, description="Root causes for delays or critical defects")
+    action_items: list[str] = Field(default_factory=list, description="Recommended continuous improvement actions for next sprint")
+
+
+class SprintAdvisorResponse(BaseModel):
+    sprint_id: int = Field(..., description="Sprint ID")
+    sprint_name: str = Field(..., description="Sprint Name")
+    capacity_status: str = Field(..., description="Capacity evaluation: Balanced, Overloaded, Underutilized")
+    risk_level: str = Field(..., description="Scope risk: Low, Medium, High")
+    recommendations: list[str] = Field(default_factory=list, description="Actionable scope and workload advice")
+    unassigned_critical_count: int = Field(0, description="Number of critical issues missing assignment")
+    workload_skew_warning: str | None = Field(None, description="Warning if a single developer holds disproportionate tickets")
+
+
 class SemanticSearchRequest(BaseModel):
     project_id: int | None = Field(default=None, ge=1, description="Optional Project ID filter")
     query: str = Field(..., min_length=1, max_length=500, description="Conceptual or keyword search phrase", examples=["transaction crashes during checkout"])
@@ -497,4 +553,78 @@ class AIChatTopicCategory(BaseModel):
 
 class AIChatTopicsResponse(BaseModel):
     categories: list[AIChatTopicCategory]
+
+
+# ── Bug Blast-Radius & Architecture Dependency Visualizer ─────────────────────
+
+class ModuleNode(BaseModel):
+    id: str = Field(..., description="Unique module slug", examples=["payment_gateway"])
+    name: str = Field(..., description="Module display name", examples=["Payment Gateway"])
+    category: str = Field(default="Core", description="Functional category")
+    open_defects_count: int = Field(default=0, description="Total active defects in module")
+    critical_defects_count: int = Field(default=0, description="Critical defects in module")
+    health_score: int = Field(default=100, ge=0, le=100, description="Module health score (0-100)")
+    risk_tier: str = Field(default="Low", description="Risk classification: Low, Medium, High, Critical")
+    assigned_developers: list[str] = Field(default_factory=list, description="Developers working on this module")
+    is_epicenter: bool = Field(default=False, description="True if focused defect originated here")
+    blast_zone: str = Field(default="safe", description="Zone: epicenter, direct_impact, cascade_risk, safe")
+    defect_ids: list[int] = Field(default_factory=list, description="Defect IDs belonging to this module")
+
+
+class DependencyEdge(BaseModel):
+    source: str = Field(..., description="Upstream caller module ID")
+    target: str = Field(..., description="Downstream provider module ID")
+    relation_type: str = Field(default="depends_on", description="Relation type: calls, authenticates, processes, depends_on")
+    severity_flow: str = Field(default="medium", description="Risk flow severity: critical, high, medium, low")
+    is_active_impact_path: bool = Field(default=False, description="True if active blast wave travels along this edge")
+
+
+class CausedIssueDetail(BaseModel):
+    target_module_id: str = Field(..., description="Affected target module ID")
+    target_module_name: str = Field(..., description="Affected target module name")
+    impact_level: str = Field(..., description="direct_impact (1st degree) or cascade_risk (2nd degree)")
+    failure_description: str = Field(..., description="Operational problem this defect triggers in the target module")
+    affected_defect_ids: list[int] = Field(default_factory=list, description="Other open defect IDs in target module compounded or blocked")
+
+
+class DefectAllocation(BaseModel):
+    defect_id: int = Field(..., description="Defect ID")
+    title: str = Field(..., description="Defect title")
+    severity: str = Field(..., description="Defect severity: critical, high, medium, low")
+    status: str = Field(..., description="Defect status: open, in_progress, in_review, resolved, closed")
+    allocated_module_id: str = Field(..., description="Auto-allocated origin module ID")
+    allocated_module_name: str = Field(..., description="Auto-allocated origin module display name")
+    allocation_confidence: int = Field(default=95, description="Allocation confidence percentage")
+    direct_impact_count: int = Field(default=0, description="Number of direct 1st-degree modules impacted")
+    cascade_risk_count: int = Field(default=0, description="Number of cascading 2nd-degree modules threatened")
+    direct_impact_module_names: list[str] = Field(default_factory=list, description="Names of directly impacted modules")
+    cascade_risk_module_names: list[str] = Field(default_factory=list, description="Names of cascading risk modules")
+    caused_issues: list[CausedIssueDetail] = Field(default_factory=list, description="Specific operational issues caused in other modules")
+    containment_advice: str = Field(default="", description="Specific mitigation/containment action for this defect")
+
+
+class BlastRadiusReport(BaseModel):
+    project_id: int = Field(..., description="Project ID")
+    project_name: str = Field(..., description="Project Name")
+    focused_issue_id: int | None = Field(default=None, description="Focused defect ID if scoped to single bug")
+    focused_issue_title: str | None = Field(default=None, description="Focused defect title")
+    focused_module_id: str | None = Field(default=None, description="Epicenter module ID")
+    system_blast_score: int = Field(..., ge=0, le=100, description="Overall system blast radius percentage (0-100%)")
+    overall_status: str = Field(..., description="System status: Operational, Elevated Risk, Degraded Flow, Critical Cascade")
+    epicenter_module: str | None = Field(default=None, description="Primary failure epicenter module name")
+    direct_impact_count: int = Field(default=0, description="Count of directly impacted dependent modules")
+    cascade_risk_count: int = Field(default=0, description="Count of secondary cascade risk modules")
+    direct_impact_modules: list[str] = Field(default_factory=list, description="Names of directly impacted modules")
+    cascade_risk_modules: list[str] = Field(default_factory=list, description="Names of secondary cascade risk modules")
+    domain_archetype: str = Field(default="SaaS & Workflow Platform", description="Architectural domain blueprint of the project")
+    available_archetypes: list[dict[str, str]] = Field(default_factory=list, description="List of available architecture domain blueprints")
+    estimated_user_impact: str = Field(..., description="Executive narrative of business/user impact")
+    containment_strategies: list[str] = Field(default_factory=list, description="Immediate AI containment recommendations")
+    nodes: list[ModuleNode] = Field(default_factory=list, description="Architectural module nodes in the graph")
+    edges: list[DependencyEdge] = Field(default_factory=list, description="Directional dependency links between modules")
+    defect_allocations: list[DefectAllocation] = Field(default_factory=list, description="Autonomous allocation and downstream failure mapping for all defects in project")
+    auto_allocated_summary: str = Field(default="", description="Autonomous allocation summary narrative")
+    total_defects_analyzed: int = Field(default=0, description="Total defects evaluated in this project")
+
+
 

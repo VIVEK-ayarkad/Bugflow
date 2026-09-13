@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -35,10 +36,39 @@ UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _seed_demo_accounts():
+    """Ensure standard enterprise demo accounts exist for evaluation."""
+    from app.auth import hash_password
+    from app.database import SessionLocal
+    from app.models import User, UserRole
+
+    db = SessionLocal()
+    try:
+        demo_users = [
+            ("admin@bugflow.io", "admin_lead", "admin123", UserRole.ADMIN),
+            ("dev@bugflow.io", "alex_developer", "dev123", UserRole.DEVELOPER),
+            ("qa@bugflow.io", "sarah_qa", "qa123", UserRole.QA_TESTER),
+            ("pm@bugflow.io", "marcus_pm", "pm123", UserRole.PROJECT_MANAGER),
+        ]
+        for email, username, pwd, role in demo_users:
+            user = db.query(User).filter(User.email.ilike(email)).first()
+            if not user:
+                db.add(User(email=email, username=username, hashed_password=hash_password(pwd), role=role))
+            else:
+                user.hashed_password = hash_password(pwd)
+                user.role = role
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Lifecycle startup and shutdown handler."""
     Base.metadata.create_all(bind=engine)
+    _seed_demo_accounts()
     yield
 
 
@@ -85,7 +115,7 @@ TAGS_METADATA = [
     },
     {
         "name": "ai",
-        "description": "AI Defect Intelligence: Dense vector semantic search, automated taxonomy classification, Code Doctor syntax/semantic repair, duplicate prevention, and Resolution Assistance Copilot.",
+        "description": "AI Defect Intelligence: Dense vector semantic search, automated taxonomy classification, duplicate prevention, and Resolution Assistance Copilot.",
     },
     {
         "name": "health",
@@ -107,7 +137,7 @@ You can obtain an access token via `POST /api/auth/login` or by clicking the **A
 ### 🛡️ Role-Based Access Control (RBAC)
 - **Admin**: Full administrative access across all projects, system metrics, and user management.
 - **Project Manager**: Project configuration, sprint creation, and team assignment.
-- **Developer**: Defect resolution, status transitions, and Code Doctor.
+- **Developer**: Defect resolution, status transitions, and resolution assistance.
 - **QA Tester**: Defect creation, classification assistance, verification, and PDF generation.
 - **Reporter**: Bug ticket submission and issue tracking.
 """
@@ -136,6 +166,9 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
+
+# Compression & Performance Middleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # CORS Configuration
 app.add_middleware(

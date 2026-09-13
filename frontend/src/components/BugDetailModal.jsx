@@ -18,7 +18,9 @@ import {
   MessageSquare,
   History,
   Bot,
+  Zap,
 } from 'lucide-react';
+import BlastRadiusVisualizer from './BlastRadiusVisualizer';
 import {
   addComment,
   assignIssue,
@@ -483,6 +485,19 @@ export default function BugDetailModal({ issue, onClose, onRefresh, onOpenAIChat
             onClick={() => setActiveTab('comments')}
           >
             Discussion Comments ({comments.length})
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'blast_radius' ? 'active' : ''}`}
+            onClick={() => setActiveTab('blast_radius')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              color: activeTab === 'blast_radius' ? '#f59e0b' : 'inherit',
+              fontWeight: '700'
+            }}
+          >
+            <Zap size={14} color="#f59e0b" /> ⚡ Blast Radius & Cascade
           </button>
           <button
             className={`tab-btn ${activeTab === 'attachments' ? 'active' : ''}`}
@@ -958,6 +973,17 @@ export default function BugDetailModal({ issue, onClose, onRefresh, onOpenAIChat
                   ))
                 )}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'blast_radius' && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <BlastRadiusVisualizer
+                projectId={currentIssue.project_id}
+                initialFocusedIssueId={currentIssue.id}
+                issues={[currentIssue]}
+                embedded={true}
+              />
             </div>
           )}
         </div>

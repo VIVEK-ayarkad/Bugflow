@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.activity import log_activity
 from app.auth import get_current_user
 from app.database import get_db
 from app.errors import ErrorResponse
+from app.blast_radius_service import compute_project_blast_radius
 from app.models import ActivityLog, Issue, Project, ProjectMember, Sprint, User, UserRole
 from app.pdf_service import generate_project_summary_pdf
 from app.schemas import (
+    BlastRadiusReport,
     ProjectCreate,
     ProjectMemberCreate,
     ProjectMemberResponse,
@@ -17,6 +19,11 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+PROJECT_EAGER_LOAD = (
+    joinedload(Project.owner),
+    selectinload(Project.members).joinedload(ProjectMember.user),
+)
 
 
 def _check_project_access(project: Project, user: User) -> bool:
@@ -45,15 +52,15 @@ def list_projects(
 ):
     """List accessible projects."""
     if current_user.role in [UserRole.ADMIN, UserRole.PROJECT_MANAGER]:
-        query = db.query(Project)
+        query = db.query(Project).options(*PROJECT_EAGER_LOAD)
     else:
         member_project_ids = [m.project_id for m in current_user.project_memberships]
         if member_project_ids:
-            query = db.query(Project).filter(
+            query = db.query(Project).options(*PROJECT_EAGER_LOAD).filter(
                 (Project.owner_id == current_user.id) | (Project.id.in_(member_project_ids))
             )
         else:
-            query = db.query(Project).filter(Project.owner_id == current_user.id)
+            query = db.query(Project).options(*PROJECT_EAGER_LOAD).filter(Project.owner_id == current_user.id)
 
     if search:
         s = f"%{search.strip()}%"
@@ -122,7 +129,7 @@ def get_project(
     current_user: User = Depends(get_current_user),
 ):
     """Get project by ID."""
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).options(*PROJECT_EAGER_LOAD).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project #{project_id} not found")
 
@@ -380,3 +387,29 @@ def download_project_pdf(
             "Content-Type": "application/pdf"
         }
     )
+
+
+@router.get(
+    "/{project_id}/blast-radius",
+    response_model=BlastRadiusReport,
+    summary="Compute Project Architecture Blast Radius",
+    description="Analyze module dependency topology, failure blast radius, cascading risks, and AI containment advice.",
+    responses={
+        200: {"description": "Blast radius dependency topology", "model": BlastRadiusReport},
+        404: {"description": "Project not found", "model": ErrorResponse},
+    },
+)
+def get_project_blast_radius(
+    project_id: int,
+    focused_issue_id: int | None = Query(default=None, description="Optional focused defect ID to compute specific blast wave"),
+    domain: str | None = Query(default=None, description="Optional domain archetype override (saas_workflow, ecommerce, data_ai, social_community, devops_infra, auto)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Compute module dependency topology and failure blast radius for a project."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project #{project_id} not found")
+
+    return compute_project_blast_radius(project_id, db, focused_issue_id=focused_issue_id, domain_override=domain)
+

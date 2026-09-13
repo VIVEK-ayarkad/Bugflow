@@ -212,9 +212,20 @@ export async function getSprints(projectId = null) {
   return request(path);
 }
 
+export async function getSprintDetail(sprintId) {
+  return request(`/sprints/${sprintId}`);
+}
+
 export async function createSprint(projectId, payload) {
   return request(`/sprints?project_id=${projectId}`, {
     method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSprint(sprintId, payload) {
+  return request(`/sprints/${sprintId}`, {
+    method: 'PUT',
     body: JSON.stringify(payload),
   });
 }
@@ -223,8 +234,22 @@ export async function startSprint(sprintId) {
   return request(`/sprints/${sprintId}/start`, { method: 'POST' });
 }
 
-export async function completeSprint(sprintId) {
-  return request(`/sprints/${sprintId}/complete`, { method: 'POST' });
+export async function completeSprint(sprintId, payload = null) {
+  return request(`/sprints/${sprintId}/complete`, {
+    method: 'POST',
+    body: payload ? JSON.stringify(payload) : JSON.stringify({ action: 'backlog' }),
+  });
+}
+
+export async function getSprintMetrics(sprintId) {
+  return request(`/sprints/${sprintId}/metrics`);
+}
+
+export async function bulkAssignSprintIssues(sprintId, payload) {
+  return request(`/sprints/${sprintId}/issues/bulk-assign`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function deleteSprint(sprintId) {
@@ -315,6 +340,14 @@ export async function aiSprintHealth(sprintId) {
   return request(`/ai/sprint-health/${sprintId}`, { method: 'POST' });
 }
 
+export async function aiSprintRetrospective(sprintId) {
+  return request(`/ai/sprint-retrospective/${sprintId}`, { method: 'POST' });
+}
+
+export async function aiSprintAdvisor(sprintId) {
+  return request(`/ai/sprint-advisor/${sprintId}`, { method: 'POST' });
+}
+
 export async function getResolutionAssistance(issueId, payload = null) {
   if (issueId) {
     return request(`/issues/${issueId}/resolution-assistance`);
@@ -335,6 +368,22 @@ export async function sendAIChat(payload) {
 export async function getAIChatTopics() {
   return request('/ai/chat/topics');
 }
+
+// ── Blast Radius & Architecture Visualizer ────────────────────────────────────
+
+export async function getProjectBlastRadius(projectId, focusedIssueId = null, domain = null) {
+  const params = new URLSearchParams();
+  if (focusedIssueId) params.append('focused_issue_id', focusedIssueId);
+  if (domain && domain !== 'auto') params.append('domain', domain);
+  const qs = params.toString();
+  return request(`/projects/${projectId}/blast-radius${qs ? `?${qs}` : ''}`);
+}
+
+export async function getIssueBlastRadius(issueId, domain = null) {
+  const qs = domain && domain !== 'auto' ? `?domain=${domain}` : '';
+  return request(`/issues/${issueId}/blast-radius${qs}`);
+}
+
 
 
 // ── PDF Export Downloads ──────────────────────────────────────────────────────

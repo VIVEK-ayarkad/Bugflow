@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -42,7 +42,7 @@ def get_dashboard_stats(
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve full dashboard defect analytics."""
-    query = db.query(Issue)
+    query = db.query(Issue).options(joinedload(Issue.assigned_developer))
     if project_id:
         query = query.filter(Issue.project_id == project_id)
 
@@ -217,7 +217,7 @@ def get_dashboard_stats(
     monthly_reports = list(monthly_trend_map.values())
 
     # 7. Recent Activities
-    act_query = db.query(ActivityLog)
+    act_query = db.query(ActivityLog).options(joinedload(ActivityLog.user))
     if project_id:
         act_query = act_query.filter(ActivityLog.project_id == project_id)
     recent_activities = act_query.order_by(ActivityLog.created_at.desc()).limit(10).all()
@@ -268,7 +268,7 @@ def get_dashboard_activity(
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve paginated activity stream."""
-    query = db.query(ActivityLog)
+    query = db.query(ActivityLog).options(joinedload(ActivityLog.user))
     if project_id:
         query = query.filter(ActivityLog.project_id == project_id)
     return query.order_by(ActivityLog.created_at.desc()).offset(skip).limit(limit).all()
