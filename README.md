@@ -4,8 +4,9 @@
   <img src="https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
   <img src="https://img.shields.io/badge/React-18.3+-61DAFB.svg?style=for-the-badge&logo=react&logoColor=black" alt="React" />
   <img src="https://img.shields.io/badge/SQLite%20%2F%20PostgreSQL-Supported-4169E1.svg?style=for-the-badge&logo=postgresql&logoColor=white" alt="Database" />
-  <img src="https://img.shields.io/badge/Pytest-60_Passed-0A9EDC.svg?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest" />
-  <img src="https://img.shields.io/badge/Vite-6.4+-646CFF.svg?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Pytest-54%2B_Passing-0A9EDC.svg?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest" />
+  <img src="https://img.shields.io/badge/Vite-6.0+-646CFF.svg?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
   <img src="https://img.shields.io/badge/AI%20Hybrid%20Engine-100%25%20Uptime-8A2BE2.svg?style=for-the-badge&logo=openai&logoColor=white" alt="AI Engine" />
   <img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="MIT License" />
 </p>
@@ -14,57 +15,73 @@
 
 ## 📌 Overview
 
-**BugFlow** is an enterprise-grade defect tracking, agile sprint management, and architecture blast-radius visualization platform built for software engineering teams, QA testers, and engineering leadership.
+**BugFlow** is a modern, enterprise-grade defect intelligence, agile sprint management, and architecture blast-radius visualization platform engineered for software developers, QA engineers, and engineering leadership.
 
-It unites a high-throughput **FastAPI** backend, **SQLAlchemy 2.0** relational persistence, a responsive **React 18** client with custom design system, **ReportLab** PDF generation, **Autonomous Blast-Radius Mapping**, and an offline-resilient **Hybrid AI Engine** with zero downtime.
+It unifies a high-throughput **FastAPI** asynchronous backend, **SQLAlchemy 2.0** relational persistence, a responsive **React 18** client with a custom design system, **ReportLab** PDF generation, **Autonomous Blast-Radius Mapping**, and an offline-resilient **Hybrid AI Engine** (OpenAI / Gemini / Deterministic heuristics) with zero downtime.
 
-> 📖 **Full System Documentation:** For an in-depth guide covering every feature, architecture, database schema, and all 59 API endpoints, see [DOCUMENTATION.md](DOCUMENTATION.md).
+> 📖 **Comprehensive System Documentation:** For complete documentation covering all schemas, architecture diagrams, and all 59 API endpoints, refer to [DOCUMENTATION.md](DOCUMENTATION.md).
 
 ---
 
-## ✨ Key Features & Capabilities
+## 📋 Table of Contents
+
+- [✨ Key Features](#-key-features)
+- [🏗️ Architecture & Technology Stack](#️-architecture--technology-stack)
+- [📁 Project Structure](#-project-structure)
+- [🚦 Quick Start Guide](#-quick-start-guide)
+  - [Prerequisites](#prerequisites)
+  - [Option A: Local Development (Recommended)](#option-a-local-development)
+  - [Option B: Docker Compose (Full Stack)](#option-b-docker-compose)
+- [🧪 Testing & Verification](#-testing--verification)
+- [⚙️ Configuration & Environment Variables](#️-configuration--environment-variables)
+- [🛡️ Role-Based Access Control (RBAC)](#️-role-based-access-control-rbac)
+- [📄 License](#-license)
+
+---
+
+## ✨ Key Features
 
 ### 1. ⚡ Autonomous Blast-Radius & Architecture Dependency Visualizer
-* **Autonomous Defect Allocation:** Automatically allocates defects across system modules based on semantic taxonomy without requiring manual defect selection.
-* **Cascading Failure Paths:** Analyzes directed graph dependencies to compute secondary downstream failure risks across microservices.
-* **Domain Blueprint Archetypes:** Auto-detects or switches across 5 domain architectures:
+* **Autonomous Defect Allocation:** Automatically allocates defects across microservice modules based on semantic taxonomy without requiring manual tagging.
+* **Cascading Downstream Failure Paths:** Analyzes directed graph dependencies to trace and highlight secondary cascading outage risks.
+* **Domain Blueprint Archetypes:** Includes 5 out-of-the-box domain blueprints:
   * 🏢 *SaaS & Workflow Platform*
   * 🛒 *E-Commerce & Retail Marketplace*
   * 🤖 *Data & AI Pipeline Platform*
   * 💬 *Social & Messaging Platform*
   * ⚙️ *DevOps & Cloud Infrastructure*
-* **Interactive SVG Graph:** Renders dependency nodes, failure epicenters with danger rings, and animated directional flow edges.
-* **Failure Impact Matrix Table:** Collapsible table detailing origin components, failure descriptions, impacted downstream services, and linked defect IDs.
+* **Interactive SVG Graph:** Renders real-time dependency nodes, failure epicenters with animated danger pulses, and directional flow edges.
+* **Failure Impact Matrix:** Detailed breakdown table containing origin components, failure descriptions, impacted downstream services, and linked defect IDs.
 
 ### 2. 🎙️ AI Copilot & Voice Bug Dictation
-* **Hands-Free Reporting:** Built-in Web Speech API dictation allows testers to speak bug descriptions directly.
-* **Line-by-Line Structured Expansion:** Converts raw prompts (e.g., *"checkout crashes on safari with 401 unhandled error"*) into a formatted report with structured titles, descriptions, numbered steps to reproduce, expected vs. actual behaviors, and severity assessments.
+* **Hands-Free Reporting:** Built-in Web Speech API dictation enables testers to describe defects by voice.
+* **Structured Expansion:** Converts informal natural language (e.g., *"checkout crashes on safari with 401 unhandled error"*) into a formatted report with reproduction steps, environment parameters, expected vs. actual outcomes, and severity classification.
 
 ### 3. 🏷️ Intelligent Defect Taxonomy & Classification
-* **Automatic Categorization:** Classifies defects into standard taxonomies:
+* **Instant Auto-Categorization:** AI automatically tags defects across three critical dimensions:
   * **Category:** *Payment, Authentication & Security, UI/UX, Performance, Database, API & Backend, etc.*
   * **Module:** *Checkout / Gateway, Auth Session, Kanban Board, Notification Service, etc.*
   * **Defect Type:** *Functional Defect, Crash / Fatal Error, UI Glitch, Security Defect, Performance Bottleneck.*
-* **1-Click Suggestion Acceptance:** Auto-populates all form dropdowns with a single click.
+* **1-Click Suggestion Acceptance:** Auto-populates defect creation forms with a single click.
 
 ### 4. ⚠️ Real-Time Duplicate Defect Prevention
-* **Pre-Submission Warning:** Scans existing defects using token Jaccard similarity and Levenshtein distance before submission.
-* **Similarity Scoring:** Highlights duplicate tickets *(e.g., `⚠️ Similar Defect Found: DEF-102 (97% Match)`)* to eliminate backlog clutter.
+* **Pre-Submission Scanning:** Evaluates candidate bugs against existing defects using token Jaccard similarity and Levenshtein distance metrics.
+* **Similarity Scoring:** Flags potential duplicates *(e.g., `⚠️ Similar Defect Found: DEF-102 (97% Match)`)* in real time to avoid redundant triage.
 
 ### 5. 🏃 Agile Sprint Management & Burndown Analytics
-* **Sprint Lifecycle:** Create sprints with 1-week, 2-week, or 4-week date presets; start and complete sprints.
+* **Sprint Lifecycle:** Create sprints with 1-week, 2-week, or 4-week presets; activate, track, and complete sprints.
 * **Backlog Planner:** Bulk assign unassigned backlog issues into active or planned sprints.
-* **Interactive SVG Burndown Chart:** Visualizes **Ideal Burn Line** vs **Actual Remaining Defects** with hoverable data points.
-* **Sprint Completion Workflow:** Rollover remaining issues to Next Sprint or return them to the Backlog.
+* **Interactive SVG Burndown Chart:** Visualizes **Ideal Burn Line** vs **Actual Remaining Defects** with hoverable daily data points.
+* **Sprint Completion Workflow:** Rollover unfinished tickets into the next sprint or return them to the backlog.
 
 ### 6. 🤖 AI Sprint Copilot Suite
-* **AI Sprint Health Analyzer:** Computes real-time Sprint Health Scores (0-100), risk levels, and bottleneck alerts.
-* **AI Sprint Retrospective Generator:** Synthesizes *"What Went Well"*, *"What Could Be Improved"*, and *"Action Items"* upon sprint closure.
-* **AI Sprint Advisor:** Analyzes developer workloads and recommends optimal defect reassignments to balance team capacity.
+* **AI Sprint Health Analyzer:** Evaluates sprint delivery risks, computing a real-time Health Score (0–100) and bottleneck diagnoses.
+* **AI Retrospective Generator:** Automatically synthesizes *"What Went Well"*, *"What Could Be Improved"*, and *"Action Items"* upon sprint completion.
+* **AI Sprint Advisor:** Analyzes developer workloads and recommends defect reassignments to balance team capacity.
 
 ### 7. 💡 Resolution Assistance Copilot
 * **Root Cause Diagnostics:** Generates probable technical root causes for logged defects.
-* **Checklist & Fix Suggestions:** Provides verification checklists, recommended code patches with 1-click copy, and historical resolved cases.
+* **Suggested Code Fixes & Checklists:** Provides copyable code snippets, verification checklists, and references to similar resolved defects.
 
 ### 8. 💬 AI Mentor & Interactive Chatbot
 * **24/7 QA & Engineering Coach:** Multi-mode assistant for onboarding junior testers, reviewing draft bug descriptions, and diagnosing HTTP/code errors (500, 401, CORS, stack traces).
@@ -72,14 +89,14 @@ It unites a high-throughput **FastAPI** backend, **SQLAlchemy 2.0** relational p
 
 ### 9. 📊 QA Analytics Dashboard (8 KPIs & 6 Charts)
 * **8 KPI Metric Cards:** Total Defects, Open, In Progress/Review, Resolved, Closed, Critical Outages, Avg Resolution Time, and My Queue.
-* **6 Visual Charts:** Created vs Resolved Trends, Defects by Category, Severity Breakdown, Status Distribution, Developer Workloads, and Resolution Velocity by Severity.
+* **6 Visual Charts:** Created vs Resolved Trends, Defects by Category, Severity Breakdown, Status Distribution, Developer Workloads, and Resolution Velocity.
 
 ### 10. 📄 Automated PDF Report Generation
-* **Single Defect PDF:** Branded report with metadata, environment details, reproduction steps, and comment history.
-* **Project QA Summary PDF:** Executive project summary with overall statistics, resolution rates, and ReportLab tables.
+* **Single Defect PDF:** Export professional, branded reports with metadata, environment details, reproduction steps, and comment history.
+* **Project QA Summary PDF:** Comprehensive executive reports with statistical breakdowns and resolution velocity tables.
 
 ### 11. 🛡️ Role-Based Access Control (RBAC) & Admin Control Center
-* **5 Distinct Roles:** `admin`, `project_manager`, `developer`, `qa_tester`, and `reporter`.
+* **5 Roles:** `admin`, `project_manager`, `developer`, `qa_tester`, and `reporter`.
 * **Admin Center:** Live system metrics, instant role promotion/demotion matrix, and user account management with self-deletion protection.
 
 ---
@@ -90,7 +107,7 @@ It unites a high-throughput **FastAPI** backend, **SQLAlchemy 2.0** relational p
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           FRONTEND (React 18 + Vite)                    │
 │  • SPA Architecture with Light / Dark Theme Engine                      │
-│  • Pure Vanilla CSS System (No heavy framework bloat)                   │
+│  • Pure Vanilla CSS System (Zero framework overhead)                    │
 │  • Interactive SVG Topologies, Burndown Curves & Multi-KPI Analytics   │
 │  • Lucide React Icons & Web Speech API Dictation Engine                 │
 └────────────────────────────────────┬────────────────────────────────────┘
@@ -98,7 +115,7 @@ It unites a high-throughput **FastAPI** backend, **SQLAlchemy 2.0** relational p
 ┌────────────────────────────────────▼────────────────────────────────────┐
 │                           BACKEND (FastAPI / Python 3.12)               │
 │  • Modular API Routers (Auth, Users, Projects, Issues, Sprints, AI)     │
-│  • Pydantic v2 Strict Validation & Custom Exception Handlers           │
+│  • Pydantic v2 Validation & Custom Error Handlers                       │
 │  • ReportLab Vector PDF Engine for Defect & Project Reports             │
 │  • Circuit-Breaker Protected AI Defect Intelligence Engine              │
 └────────────────────────────────────┬────────────────────────────────────┘
@@ -110,15 +127,51 @@ It unites a high-throughput **FastAPI** backend, **SQLAlchemy 2.0** relational p
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Component | Technologies |
+| Layer | Technologies |
 | :--- | :--- |
-| **Frontend** | React 18, Vite, Vanilla CSS3, Lucide React, Context API |
+| **Frontend** | React 18, Vite 6, React Router v7, Vanilla CSS3, Lucide React, Context API |
 | **Backend API** | FastAPI, Pydantic v2, Python 3.12, Uvicorn ASGI |
-| **Database & ORM** | SQLAlchemy 2.0, SQLite3 / PostgreSQL 15+ |
+| **Database & ORM** | SQLAlchemy 2.0, SQLite3 (Dev) / PostgreSQL 15+ (Prod) |
 | **Authentication** | Passlib (Bcrypt), PyJWT (HS256), Role-Based Access Control (RBAC) |
 | **PDF Generation** | ReportLab Document Engine |
 | **AI Intelligence** | Hybrid Engine (OpenAI Async Client / Gemini / Deterministic Rules + TTL Cache & Circuit Breaker) |
-| **Testing & CI** | Pytest (60/60 passing), GitHub Actions CI/CD |
+| **Testing & CI** | Pytest, GitHub Actions CI/CD |
+| **Containerization** | Docker, Docker Compose |
+
+---
+
+## 📁 Project Structure
+
+```
+Bug/
+├── backend/
+│   ├── app/
+│   │   ├── routers/            # API Route handlers (auth, issues, sprints, dashboard, etc.)
+│   │   ├── ai_service.py       # Hybrid AI Engine with fallback & circuit breaker
+│   │   ├── blast_radius_service.py # Graph & failure propagation analysis
+│   │   ├── database.py         # SQLAlchemy engine & session lifecycle
+│   │   ├── models.py           # Database models (User, Project, Issue, Sprint, etc.)
+│   │   ├── schemas.py          # Pydantic v2 validation models
+│   │   ├── pdf_service.py      # ReportLab PDF generation
+│   │   └── main.py             # FastAPI entrypoint & middleware configuration
+│   ├── tests/                  # Pytest modular unit & integration test suites
+│   ├── test_api_suite.py       # Comprehensive end-to-end API verification suite
+│   ├── Dockerfile              # Backend container definition
+│   └── requirements.txt        # Python dependencies
+├── frontend/
+│   ├── src/
+│   │   ├── components/         # React components (Dashboard, Issues, Sprints, BlastRadius, etc.)
+│   │   ├── AuthContext.jsx     # Authentication state provider
+│   │   ├── api.js              # Centralized Axios/fetch HTTP client
+│   │   ├── index.css           # Global CSS variables, themes, and utility classes
+│   │   └── App.jsx             # Root application router & shell
+│   ├── index.html              # HTML5 entrypoint
+│   ├── Dockerfile              # Frontend multi-stage Nginx container definition
+│   └── package.json            # NPM dependencies & scripts
+├── docker-compose.yml          # Multi-container orchestration (Postgres + Backend + Frontend)
+├── DOCUMENTATION.md            # Comprehensive technical documentation & API reference
+└── README.md                   # Project overview & quickstart guide
+```
 
 ---
 
@@ -127,11 +180,13 @@ It unites a high-throughput **FastAPI** backend, **SQLAlchemy 2.0** relational p
 ### Prerequisites
 * **Python 3.10+** (Python 3.12 recommended)
 * **Node.js 18+** & **npm**
+* *(Optional)* **Docker & Docker Compose**
 
 ---
 
-### 1. Backend Setup
+### Option A: Local Development
 
+#### 1. Backend Setup
 ```bash
 # Navigate to backend directory
 cd backend
@@ -150,18 +205,15 @@ uvicorn app.main:app --reload --port 8000
 * 🚀 **Backend API:** [http://localhost:8000](http://localhost:8000)
 * 📚 **Interactive Swagger API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 
----
-
-### 2. Frontend Setup
-
+#### 2. Frontend Setup
 ```bash
-# Navigate to frontend directory
+# In a new terminal, navigate to frontend directory
 cd frontend
 
 # Install dependencies
 npm install
 
-# Start Vite development server
+# Start the Vite development server
 npm run dev
 ```
 
@@ -169,32 +221,49 @@ npm run dev
 
 ---
 
+### Option B: Docker Compose
+
+To spin up the complete stack with PostgreSQL, FastAPI, and the React frontend in containers:
+
+```bash
+docker-compose up --build
+```
+
+* **Frontend:** [http://localhost](http://localhost) (Port 80)
+* **Backend API:** [http://localhost:8000](http://localhost:8000)
+* **PostgreSQL:** `localhost:5432`
+
+---
+
 ## 🧪 Testing & Verification
 
-BugFlow includes an automated 60-point verification test suite:
+BugFlow comes with extensive automated test suites covering authentication, defect lifecycles, status transitions, RBAC permissions, and AI copilot services.
 
+### Run Backend Pytest Suite
 ```bash
 cd backend
 source venv/bin/activate
-
-# Run the complete test suite
-pytest test_api_suite.py -v -s
+pytest tests/ -v
 ```
 
-**Verification Results:** `60 PASSED, 0 FAILED (100% Pass Rate)`.
+### Run End-to-End API Test Suite
+```bash
+cd backend
+source venv/bin/activate
+python -m pytest test_api_suite.py -v
+```
 
-To verify the frontend production build:
+### Run Frontend Production Build Check
 ```bash
 cd frontend
 npm run build
 ```
-**Build Result:** `✓ 1807 modules transformed, 0 errors`.
 
 ---
 
-## ⚙️ Environment Variables (Optional)
+## ⚙️ Configuration & Environment Variables
 
-Create a `.env` file inside `backend/`:
+Create an optional `.env` file in the `backend/` directory:
 
 ```env
 # Security & JWT Tokens
@@ -204,26 +273,27 @@ ALGORITHM=HS256
 
 # Database (Default: SQLite sqlite:///./bugflow.db)
 DATABASE_URL=sqlite:///./bugflow.db
+# For PostgreSQL: DATABASE_URL=postgresql://postgres:postgres@localhost:5432/bugflow_db
 
-# AI Configuration (Optional: Built-in deterministic heuristics operate offline)
+# AI Configuration (Optional: Deterministic heuristics work offline automatically)
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-4o-mini
 ```
 
 ---
 
-## 🛡️ User Roles & Permissions Matrix
+## 🛡️ Role-Based Access Control (RBAC)
 
 | Role | Permissions |
 | :--- | :--- |
-| 👑 **Admin** | Full system control, user role management, system audit logs, all projects. |
-| 📋 **Project Manager** | Project creation, sprint lifecycle management, team assignments, PDF exports. |
-| 💻 **Developer** | Defect resolution, sprint board updates, AI resolution assistance, status transitions. |
-| 🧪 **QA Tester** | Defect reporting, voice dictation, classification, duplicate scans, PDF exports. |
-| 📝 **Reporter** | Submitting bug reports and monitoring issue progress. |
+| 👑 **Admin** | Full system control, user role management, system audit logs, access to all projects. |
+| 📋 **Project Manager** | Project creation & configuration, sprint lifecycle management, team workload balancing, PDF exports. |
+| 💻 **Developer** | Defect resolution, sprint board task progression, AI resolution assistance, status transitions. |
+| 🧪 **QA Tester** | Defect reporting, voice dictation, automated classification, duplicate scanning, PDF exports. |
+| 📝 **Reporter** | Submitting bug reports and monitoring tracked issue progress. |
 
 ---
 
-## 📄 License & Attribution
+## 📄 License
 
-Distributed under the **MIT License**. Engineered for modern software development teams.
+This project is licensed under the **MIT License**.
