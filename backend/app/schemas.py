@@ -595,6 +595,7 @@ class DefectAllocation(BaseModel):
     allocated_module_id: str = Field(..., description="Auto-allocated origin module ID")
     allocated_module_name: str = Field(..., description="Auto-allocated origin module display name")
     allocation_confidence: int = Field(default=95, description="Allocation confidence percentage")
+    allocation_reason: str = Field(default="", description="Human-friendly explanation of why the defect was allocated to this module")
     direct_impact_count: int = Field(default=0, description="Number of direct 1st-degree modules impacted")
     cascade_risk_count: int = Field(default=0, description="Number of cascading 2nd-degree modules threatened")
     direct_impact_module_names: list[str] = Field(default_factory=list, description="Names of directly impacted modules")

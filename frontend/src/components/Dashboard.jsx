@@ -463,7 +463,8 @@ function WorkloadChart({ data = [] }) {
 }
 
 function ResolutionTimeChart({ summary = {}, data = {} }) {
-  const avgTime = summary.avg_resolution_time_formatted || 'N/A';
+  const avgHours = summary.avg_resolution_time_hours;
+  const avgDays = summary.avg_resolution_time_days;
   const resolutionRate = summary.resolution_rate ?? 0;
   const resolvedCount = summary.total_resolved_and_closed || 0;
   const totalCount = summary.total_bugs || 0;
@@ -474,6 +475,14 @@ function ResolutionTimeChart({ summary = {}, data = {} }) {
     { key: 'medium', label: 'Medium', color: '#eab308' },
     { key: 'low', label: 'Low', color: '#3b82f6' },
   ];
+
+  const hasOverallData = avgHours !== null && avgHours !== undefined;
+  const daysDisplay = avgDays !== null && avgDays !== undefined
+    ? `${avgDays} days`
+    : hasOverallData
+    ? `${(avgHours / 24).toFixed(1)} days`
+    : 'N/A';
+  const hoursDisplay = hasOverallData ? `${avgHours} hrs` : 'N/A';
 
   return (
     <div className="chart-card">
@@ -486,33 +495,47 @@ function ResolutionTimeChart({ summary = {}, data = {} }) {
         </span>
       </div>
 
-      {/* Main Stat Highlight */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', margin: '0.5rem 0 0.85rem 0', padding: '0.65rem 0.85rem', background: 'var(--bg-dark-accent)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+      {/* Main Stat Highlight - Displayed in both Days and Hours */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0.5rem 0 0.85rem 0', padding: '0.75rem 0.9rem', background: 'var(--bg-dark-accent)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', flexWrap: 'wrap', gap: '0.6rem' }}>
         <div>
-          <span style={{ fontSize: '1.6rem', fontWeight: '800', fontFamily: 'var(--display)', color: 'var(--accent)' }}>
-            {avgTime}
-          </span>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginLeft: '0.5rem', fontWeight: '600' }}>
-            Overall MTTR
-          </span>
+          {hasOverallData ? (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.55rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '1.55rem', fontWeight: '800', fontFamily: 'var(--display)', color: 'var(--accent)' }}>
+                {daysDisplay}
+              </span>
+              <span style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text)', background: 'rgba(99, 102, 241, 0.12)', padding: '0.15rem 0.55rem', borderRadius: '6px', border: '1px solid rgba(99, 102, 241, 0.25)' }}>
+                {hoursDisplay}
+              </span>
+            </div>
+          ) : (
+            <span style={{ fontSize: '1.55rem', fontWeight: '800', fontFamily: 'var(--display)', color: 'var(--text-muted)' }}>
+              N/A
+            </span>
+          )}
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', fontWeight: '600', marginTop: '0.2rem' }}>
+            Overall MTTR (Mean Time To Resolution in Days &amp; Hours)
+          </div>
         </div>
-        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-          <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text)' }}>
+        <div style={{ textAlign: 'right' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text)' }}>
             {resolvedCount} / {totalCount}
           </span>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Resolved Defects</div>
         </div>
       </div>
 
-      {/* Breakdown by Severity */}
-      <div style={{ fontSize: '0.74rem', fontWeight: '700', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
-        MTTR by Severity Tier
+      {/* Breakdown by Severity - Displayed in both Days and Hours */}
+      <div style={{ fontSize: '0.74rem', fontWeight: '700', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.45rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>MTTR by Severity Tier</span>
+        <span style={{ fontSize: '0.68rem', textTransform: 'none', color: 'var(--text-muted)' }}>Days &amp; Hours</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
         {severityOrder.map((s) => {
-          const item = data[s.key] || { formatted: 'N/A', count: 0 };
+          const item = data[s.key] || { count: 0, avg_hours: null, avg_days: null, formatted: 'N/A' };
+          const hasItemData = item.count > 0 && item.avg_hours !== null && item.avg_hours !== undefined;
+          const sevDays = item.avg_days !== null && item.avg_days !== undefined ? item.avg_days : hasItemData ? +(item.avg_hours / 24).toFixed(1) : null;
           return (
-            <div key={s.key} style={{ padding: '0.4rem 0.55rem', background: 'var(--bg-dark-accent)', borderRadius: '6px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+            <div key={s.key} style={{ padding: '0.45rem 0.6rem', background: 'var(--bg-dark-accent)', borderRadius: '6px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.74rem', fontWeight: '700', color: s.color }}>
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: s.color }} />
@@ -520,9 +543,20 @@ function ResolutionTimeChart({ summary = {}, data = {} }) {
                 </span>
                 <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>({item.count})</span>
               </div>
-              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text)' }}>
-                {item.formatted}
-              </div>
+              {hasItemData ? (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.88rem', fontWeight: '800', color: 'var(--text)' }}>
+                    {sevDays} d
+                  </span>
+                  <span style={{ fontSize: '0.74rem', fontWeight: '600', color: 'var(--text-dim)' }}>
+                    ({item.avg_hours} hrs)
+                  </span>
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                  N/A
+                </div>
+              )}
             </div>
           );
         })}
@@ -943,12 +977,25 @@ export default function Dashboard() {
 
                 <div className="stat-card">
                   <div className="stat-card-header">
-                    <span className="stat-label">Avg Resolution Time</span>
+                    <span className="stat-label">Avg Resolution Time (MTTR)</span>
                     <Clock size={16} color="var(--accent)" />
                   </div>
-                  <span className="stat-number" style={{ color: 'var(--accent)', fontSize: '1.45rem' }}>
-                    {stats.summary.avg_resolution_time_formatted || 'N/A'}
-                  </span>
+                  {stats.summary.avg_resolution_time_hours !== null && stats.summary.avg_resolution_time_hours !== undefined ? (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <span className="stat-number" style={{ color: 'var(--accent)', fontSize: '1.35rem' }}>
+                        {stats.summary.avg_resolution_time_days !== null && stats.summary.avg_resolution_time_days !== undefined
+                          ? `${stats.summary.avg_resolution_time_days}d`
+                          : `${(stats.summary.avg_resolution_time_hours / 24).toFixed(1)}d`}
+                      </span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-dim)', background: 'var(--bg-dark-accent)', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                        {stats.summary.avg_resolution_time_hours} hrs
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="stat-number" style={{ color: 'var(--accent)', fontSize: '1.35rem' }}>
+                      {stats.summary.avg_resolution_time_formatted || 'N/A'}
+                    </span>
+                  )}
                   <span className="stat-subtext">{stats.summary.resolution_rate}% resolution rate</span>
                 </div>
 

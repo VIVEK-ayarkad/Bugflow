@@ -190,6 +190,8 @@ export default function BlastRadiusVisualizer({
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
   const [matrixSearch, setMatrixSearch] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
+  const [moduleFilter, setModuleFilter] = useState('all');
+  const [showBeginnerGuide, setShowBeginnerGuide] = useState(true);
   const [expandedDefectIds, setExpandedDefectIds] = useState({});
 
   useEffect(() => {
@@ -227,6 +229,11 @@ export default function BlastRadiusVisualizer({
     return report.nodes.find((n) => n.id === selectedNodeId) || report.nodes[0];
   }, [report, selectedNodeId]);
 
+  const availableModules = useMemo(() => {
+    if (!report?.nodes) return [];
+    return report.nodes.map((n) => ({ id: n.id, name: n.name, open_defects_count: n.open_defects_count }));
+  }, [report]);
+
   const activeEdges = useMemo(() => {
     if (!report?.edges) return [];
     const targetId = hoveredNodeId || selectedNodeId;
@@ -262,12 +269,14 @@ export default function BlastRadiusVisualizer({
     if (!report?.defect_allocations) return [];
     return report.defect_allocations.filter((item) => {
       const matchesSev = severityFilter === 'all' || item.severity.toLowerCase() === severityFilter.toLowerCase();
+      const matchesMod = moduleFilter === 'all' || item.allocated_module_id === moduleFilter;
       const query = matrixSearch.toLowerCase().trim();
-      if (!query) return matchesSev;
+      if (!query) return matchesSev && matchesMod;
 
       const matchesQuery =
         item.title.toLowerCase().includes(query) ||
         item.allocated_module_name.toLowerCase().includes(query) ||
+        (item.allocation_reason && item.allocation_reason.toLowerCase().includes(query)) ||
         `#def-${item.defect_id}`.toLowerCase().includes(query) ||
         `${item.defect_id}`.includes(query) ||
         item.caused_issues?.some((ci) =>
@@ -275,9 +284,9 @@ export default function BlastRadiusVisualizer({
           ci.failure_description.toLowerCase().includes(query)
         );
 
-      return matchesSev && matchesQuery;
+      return matchesSev && matchesMod && matchesQuery;
     });
-  }, [report, matrixSearch, severityFilter]);
+  }, [report, matrixSearch, severityFilter, moduleFilter]);
 
   const toggleExpandDefect = (dId) => {
     setExpandedDefectIds((prev) => ({
@@ -350,7 +359,7 @@ export default function BlastRadiusVisualizer({
                 }}
               >
                 <Zap size={22} color="var(--accent)" />
-                Bug Blast-Radius & Architecture Dependency Visualizer
+                Bug Blast-Radius &amp; Architecture Dependency Visualizer
               </h2>
 
               <span
@@ -389,7 +398,7 @@ export default function BlastRadiusVisualizer({
             </div>
 
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Project: <strong style={{ color: 'var(--text)' }}>{report.project_name}</strong> • Autonomously computes for which components each defect causes issues without requiring manual selection.
+              Project: <strong style={{ color: 'var(--text)' }}>{report.project_name}</strong> • Computes which components each defect impacts and traces cascading failure paths.
             </p>
           </div>
 
@@ -511,6 +520,114 @@ export default function BlastRadiusVisualizer({
         </div>
       </div>
 
+      {/* ── Friendly Beginner Guide / Interactive Explainer ─────────────── */}
+      <div
+        style={{
+          background: 'var(--surface)',
+          borderRadius: 'var(--radius)',
+          border: '1px solid var(--border)',
+          padding: '1.15rem 1.4rem',
+          boxShadow: 'var(--shadow-soft)',
+        }}
+      >
+        <div
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+          onClick={() => setShowBeginnerGuide(!showBeginnerGuide)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div style={{ background: 'var(--accent-light)', padding: '0.4rem', borderRadius: '8px', color: 'var(--accent)', display: 'flex' }}>
+              <Info size={18} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'var(--text)' }}>
+                👶 Beginner's Visual Guide: Understanding Bug Blast-Radius
+              </h3>
+              <p style={{ margin: '0.15rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                How defects in one module propagate across connected components in real time.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            style={{
+              background: 'var(--bg-dark-accent)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px',
+              padding: '0.3rem 0.65rem',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              color: 'var(--text)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+          >
+            {showBeginnerGuide ? 'Hide Guide' : 'Show Guide'}
+            {showBeginnerGuide ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+        </div>
+
+        {showBeginnerGuide && (
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+            {/* 4 Concept Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
+              {/* Step 1 */}
+              <div style={{ background: 'var(--bg-dark-accent)', padding: '0.75rem 0.9rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)', borderLeft: '4px solid #ef4444' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.3rem' }}>
+                  <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.68rem', fontWeight: 900, borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>1</span>
+                  <strong style={{ fontSize: '0.84rem', color: '#ef4444' }}>🔴 Defect Epicenter</strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text)', lineHeight: 1.4 }}>
+                  <strong>Where the bug lives.</strong> The defect is reported directly inside this component (e.g. Auth, Dashboard, or File Store).
+                </p>
+              </div>
+
+              {/* Step 2 */}
+              <div style={{ background: 'var(--bg-dark-accent)', padding: '0.75rem 0.9rem', borderRadius: '8px', border: '1px solid rgba(249, 115, 22, 0.3)', borderLeft: '4px solid #f97316' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.3rem' }}>
+                  <span style={{ background: '#f97316', color: '#fff', fontSize: '0.68rem', fontWeight: 900, borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>2</span>
+                  <strong style={{ fontSize: '0.84rem', color: '#f97316' }}>🟠 Direct Impact (1st-Deg)</strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text)', lineHeight: 1.4 }}>
+                  <strong>Immediate breakages.</strong> Connected services that call the broken component directly will start failing immediately.
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div style={{ background: 'var(--bg-dark-accent)', padding: '0.75rem 0.9rem', borderRadius: '8px', border: '1px solid rgba(234, 179, 8, 0.3)', borderLeft: '4px solid #eab308' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.3rem' }}>
+                  <span style={{ background: '#eab308', color: '#fff', fontSize: '0.68rem', fontWeight: 900, borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>3</span>
+                  <strong style={{ fontSize: '0.84rem', color: '#eab308' }}>🟡 Cascade Risk (2nd-Deg)</strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text)', lineHeight: 1.4 }}>
+                  <strong>Domino effect.</strong> Secondary components further down the chain that experience latency spikes, timeouts, or degraded data.
+                </p>
+              </div>
+
+              {/* Step 4 */}
+              <div style={{ background: 'var(--bg-dark-accent)', padding: '0.75rem 0.9rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)', borderLeft: '4px solid #10b981' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.3rem' }}>
+                  <span style={{ background: '#10b981', color: '#fff', fontSize: '0.68rem', fontWeight: 900, borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>4</span>
+                  <strong style={{ fontSize: '0.84rem', color: '#10b981' }}>🟢 Safe Modules</strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text)', lineHeight: 1.4 }}>
+                  <strong>Unaffected.</strong> These components are isolated from the failure path and operate with 100% nominal integrity.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick interactive tip */}
+            <div style={{ background: 'rgba(99, 102, 241, 0.08)', padding: '0.6rem 0.9rem', borderRadius: '6px', border: '1px solid rgba(99, 102, 241, 0.25)', fontSize: '0.78rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Sparkles size={16} color="var(--accent)" style={{ flexShrink: 0 }} />
+              <span>
+                <strong>Interactive Tip:</strong> Click any component box on the map below or click <strong>"Spotlight on Map"</strong> on any defect in the table to see its exact animated failure path and containment actions!
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ── Autonomous Defect Allocation & Impact Propagation Matrix ─────────── */}
       <div
         style={{
@@ -526,24 +643,48 @@ export default function BlastRadiusVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
               <Workflow size={18} className="text-accent" />
               <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>
-                Autonomous Defect Allocation & Downstream Failure Matrix
+                Defect Allocation &amp; Downstream Failure Matrix
               </h3>
               <span className="badge" style={{ background: 'var(--bg-dark-accent)', border: '1px solid var(--border)', fontSize: '0.72rem' }}>
                 {report.defect_allocations?.length || 0} Total Defects
               </span>
             </div>
             <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              The system automatically classifies each defect into its host module and maps all secondary systems and issues it endangers.
+              Each defect is properly allocated to its host architectural component with clear allocation rationale and secondary systems threatened.
             </p>
           </div>
 
-          {/* Search & Severity Filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          {/* Search, Module & Severity Filters */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {/* Module Filter Dropdown */}
+            <select
+              value={moduleFilter}
+              onChange={(e) => setModuleFilter(e.target.value)}
+              style={{
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.78rem',
+                borderRadius: '6px',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-dark-accent)',
+                color: 'var(--text)',
+                fontWeight: 600,
+                maxWidth: '180px',
+              }}
+            >
+              <option value="all">All Components ({report.defect_allocations?.length || 0})</option>
+              {availableModules.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({report.defect_allocations?.filter((a) => a.allocated_module_id === m.id).length || 0})
+                </option>
+              ))}
+            </select>
+
+            {/* Search Input */}
             <div style={{ position: 'relative' }}>
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="text"
-                placeholder="Filter defects or modules..."
+                placeholder="Search defects, modules, keywords..."
                 value={matrixSearch}
                 onChange={(e) => setMatrixSearch(e.target.value)}
                 style={{
@@ -553,18 +694,19 @@ export default function BlastRadiusVisualizer({
                   border: '1px solid var(--border)',
                   background: 'var(--bg-dark-accent)',
                   color: 'var(--text)',
-                  width: '190px',
+                  width: '180px',
                 }}
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '0.3rem' }}>
+            {/* Severity Tabs */}
+            <div style={{ display: 'flex', gap: '0.25rem' }}>
               {['all', 'critical', 'high', 'medium', 'low'].map((sev) => (
                 <button
                   key={sev}
                   onClick={() => setSeverityFilter(sev)}
                   style={{
-                    padding: '0.3rem 0.6rem',
+                    padding: '0.3rem 0.55rem',
                     fontSize: '0.72rem',
                     borderRadius: '6px',
                     border: '1px solid var(--border)',
@@ -585,10 +727,10 @@ export default function BlastRadiusVisualizer({
         {/* Matrix List / Cards */}
         {filteredAllocations.length === 0 ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            No defects found matching filter criteria.
+            No defects found matching the selected filter criteria.
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '360px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '380px', overflowY: 'auto', paddingRight: '0.25rem' }}>
             {filteredAllocations.map((alloc) => {
               const isExpanded = !!expandedDefectIds[alloc.defect_id];
               const isSpotlighted = focusedIssueId === alloc.defect_id;
@@ -613,7 +755,7 @@ export default function BlastRadiusVisualizer({
                     padding: '0.85rem 1rem',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '0.6rem',
+                    gap: '0.55rem',
                     transition: 'all 0.2s ease',
                   }}
                 >
@@ -639,14 +781,14 @@ export default function BlastRadiusVisualizer({
                           const orig = issues.find((i) => i.id === alloc.defect_id);
                           if (orig && onSelectIssue) onSelectIssue(orig);
                         }}
-                        title="View Defect Details"
+                        title="Click to view defect details"
                       >
                         {alloc.title}
                       </strong>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      {/* Auto-Allocated Origin Component Pill */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {/* Properly Allocated Component Pill */}
                       <span
                         style={{
                           background: 'var(--surface)',
@@ -691,7 +833,7 @@ export default function BlastRadiusVisualizer({
                         }}
                       >
                         <Flame size={12} color={isSpotlighted ? '#ffffff' : '#ef4444'} />
-                        {isSpotlighted ? 'Release Spotlight' : 'Spotlight in Graph'}
+                        {isSpotlighted ? 'Release Spotlight' : 'Spotlight on Map'}
                       </button>
 
                       <button
@@ -712,14 +854,22 @@ export default function BlastRadiusVisualizer({
                     </div>
                   </div>
 
+                  {/* Allocation Logic Explainer Badge */}
+                  {alloc.allocation_reason && (
+                    <div style={{ fontSize: '0.73rem', color: 'var(--text-dim)', background: 'var(--surface)', padding: '0.3rem 0.6rem', borderRadius: '5px', border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ color: 'var(--accent)', fontWeight: 700 }}>🎯 Allocation Logic:</span>
+                      <span>{alloc.allocation_reason}</span>
+                    </div>
+                  )}
+
                   {/* Impact Summary Pill Bar */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', fontSize: '0.75rem' }}>
-                    <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Autonomous Downstream Impact:</span>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Downstream Blast Radius:</span>
                     <span className="badge" style={{ background: 'rgba(249, 115, 22, 0.15)', color: '#f97316', fontSize: '0.72rem', fontWeight: 700 }}>
-                      ⚡ {alloc.direct_impact_count} Direct Impact Modules ({alloc.direct_impact_module_names.slice(0, 2).join(', ')}{alloc.direct_impact_module_names.length > 2 ? '…' : ''})
+                      ⚡ {alloc.direct_impact_count} Direct Callers Impacted {alloc.direct_impact_module_names?.length > 0 ? `(${alloc.direct_impact_module_names.slice(0, 2).join(', ')}${alloc.direct_impact_module_names.length > 2 ? '…' : ''})` : ''}
                     </span>
                     <span className="badge" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', fontSize: '0.72rem', fontWeight: 700 }}>
-                      🌊 {alloc.cascade_risk_count} Cascade Risk Modules ({alloc.cascade_risk_module_names.slice(0, 2).join(', ')}{alloc.cascade_risk_module_names.length > 2 ? '…' : ''})
+                      🌊 {alloc.cascade_risk_count} Transitive Ripple Risk {alloc.cascade_risk_module_names?.length > 0 ? `(${alloc.cascade_risk_module_names.slice(0, 2).join(', ')}${alloc.cascade_risk_module_names.length > 2 ? '…' : ''})` : ''}
                     </span>
                   </div>
 
@@ -738,7 +888,7 @@ export default function BlastRadiusVisualizer({
                       }}
                     >
                       <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                        💥 Exact Downstream Failures & Regressions Caused by this Defect:
+                        💥 Exact Downstream Failures Caused Across Components:
                       </div>
 
                       {alloc.caused_issues?.map((ci, idx) => (
@@ -757,7 +907,7 @@ export default function BlastRadiusVisualizer({
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontWeight: 700, color: ci.impact_level === 'direct_impact' ? '#f97316' : '#eab308' }}>
-                              {ci.impact_level === 'direct_impact' ? '⚡ Direct Caller' : '🌊 Cascade Risk'}: {ci.target_module_name}
+                              {ci.impact_level === 'direct_impact' ? '⚡ 1st Degree Direct Caller' : '🌊 2nd Degree Ripple'}: {ci.target_module_name}
                             </span>
                             {ci.affected_defect_ids?.length > 0 && (
                               <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 700 }}>

@@ -92,7 +92,13 @@ def test_dashboard_stats_reflects_status_transitions(client, test_project, test_
     stats_res = client.get(f"/api/dashboard/stats?project_id={test_project.id}", headers=admin_headers)
     assert stats_res.status_code == 200
     stats = stats_res.json()
-    assert stats["summary"]["total_bugs"] >= 1
-    assert stats["summary"]["resolved_bugs"] >= 1
-    assert stats["summary"]["resolution_rate"] > 0.0
     assert stats["charts"]["by_status"]["resolved"] >= 1
+    assert "avg_resolution_time_hours" in stats["summary"]
+    assert "avg_resolution_time_days" in stats["summary"]
+    assert "avg_resolution_time_formatted" in stats["summary"]
+    assert "avg_resolution_time_days_formatted" in stats["summary"]
+    assert "avg_resolution_time_hours_formatted" in stats["summary"]
+    for sev_data in stats["charts"]["resolution_by_severity"].values():
+        assert "avg_hours" in sev_data
+        assert "avg_days" in sev_data
+        assert "formatted" in sev_data

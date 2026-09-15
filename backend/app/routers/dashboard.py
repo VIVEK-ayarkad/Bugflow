@@ -14,17 +14,11 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 def format_duration(hours: float | None) -> str:
-    """Format decimal hours into human-readable duration strings."""
+    """Format decimal hours into human-readable duration string displaying both days and hours."""
     if hours is None:
         return "N/A"
-    if hours < 1.0:
-        mins = max(1, int(round(hours * 60)))
-        return f"{mins} min" if mins == 1 else f"{mins} mins"
-    elif hours < 24.0:
-        return f"{hours:.1f} hrs"
-    else:
-        days = hours / 24.0
-        return f"{days:.1f} days"
+    days = hours / 24.0
+    return f"{days:.1f} days ({hours:.1f} hrs)"
 
 
 @router.get(
@@ -177,14 +171,23 @@ def get_dashboard_stats(
         if resolution_durations_hours
         else None
     )
+    avg_resolution_days = (
+        round(avg_resolution_hours / 24.0, 2)
+        if avg_resolution_hours is not None
+        else None
+    )
 
     resolution_by_severity = {}
     for sev, durs in sev_durations.items():
         sev_key = sev.value
         avg_h = sum(durs) / len(durs) if durs else None
+        avg_d = round(avg_h / 24.0, 2) if avg_h is not None else None
         resolution_by_severity[sev_key] = {
             "avg_hours": round(avg_h, 2) if avg_h is not None else None,
+            "avg_days": avg_d,
             "formatted": format_duration(avg_h),
+            "formatted_days": f"{avg_d:.1f} days" if avg_d is not None else "N/A",
+            "formatted_hours": f"{avg_h:.1f} hrs" if avg_h is not None else "N/A",
             "count": len(durs),
         }
 
@@ -235,7 +238,10 @@ def get_dashboard_stats(
             "assigned_bugs": assigned_bugs,
             "resolution_rate": resolution_rate,
             "avg_resolution_time_hours": round(avg_resolution_hours, 2) if avg_resolution_hours is not None else None,
+            "avg_resolution_time_days": avg_resolution_days,
             "avg_resolution_time_formatted": format_duration(avg_resolution_hours),
+            "avg_resolution_time_days_formatted": f"{avg_resolution_days:.1f} days" if avg_resolution_days is not None else "N/A",
+            "avg_resolution_time_hours_formatted": f"{avg_resolution_hours:.1f} hrs" if avg_resolution_hours is not None else "N/A",
         },
         "charts": {
             "by_severity": severity_counts,

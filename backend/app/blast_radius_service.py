@@ -464,60 +464,195 @@ def detect_project_domain(project_name: str, project_desc: str | None, issues: l
     return "saas_workflow"
 
 
-def _match_module_id_with_confidence(issue: Issue, module_templates: list[dict[str, Any]]) -> tuple[str, int]:
-    """Classify an issue to a module ID from the active blueprint using multi-attribute weighted scoring."""
-    raw_text = f"{issue.module or ''} {issue.category or ''} {issue.defect_type or ''} {issue.title} {issue.description or ''} {issue.steps_to_reproduce or ''} {issue.actual_behavior or ''}".lower()
-    words = set(re.findall(r"\b[a-zA-Z0-9_-]+\b", raw_text))
+MODULE_ALIAS_MAP: dict[str, list[str]] = {
+    # Auth & Security
+    "auth_rbac": ["auth", "authentication", "login", "signup", "register", "rbac", "jwt", "token", "password", "permission", "roles", "session", "oauth", "security", "credentials", "access control", "unauthorized", "forbidden"],
+    "auth_accounts": ["auth", "authentication", "account", "login", "signup", "user", "password", "session", "profile", "customer", "buyer", "member"],
+    "auth_iam": ["auth", "iam", "token", "permission", "key", "role", "access", "credentials", "privilege"],
+    "auth_security": ["auth", "security", "login", "password", "session", "token", "privacy", "block", "ban", "moderation"],
+    "auth_vault": ["auth", "vault", "secrets", "iam", "keys", "certificate", "credentials", "token lease"],
+
+    # Client / UI / Frontend
+    "client_dashboard": ["dashboard", "ui", "frontend", "react", "view", "page", "modal", "css", "layout", "render", "button", "kanban", "table", "dropdown", "navbar", "sidebar", "theme", "dark mode", "light mode", "client", "interface", "display"],
+    "storefront": ["storefront", "store", "shop", "browse", "catalog", "cart", "product", "mobile app", "ui", "frontend", "app"],
+    "data_portal": ["data portal", "portal", "dashboard", "ui", "viz", "chart", "graph", "view", "report"],
+    "client_app": ["client app", "client", "app", "mobile", "ios", "android", "web", "ui", "feed"],
+    "cli_console": ["cli", "console", "terminal", "command", "shell", "ui"],
+
+    # API Gateway
+    "api_gateway": ["api gateway", "gateway", "api", "ingress", "proxy", "route", "endpoint", "cors", "network", "server", "http", "timeout", "rest", "router", "load balancer", "500", "502", "504"],
+
+    # Workflow & Core Engine
+    "task_engine": ["task", "defect", "issue", "bug", "workflow", "ticket", "engine", "status", "transition", "crud", "board", "backlog", "priority", "severity", "lifecycle", "assign", "resolution"],
+    "cart_checkout": ["cart", "checkout", "basket", "order", "purchase", "buy", "coupon", "discount", "transaction"],
+    "ingestion_pipeline": ["ingestion", "stream", "kafka", "etl", "sync", "batch", "pipeline", "extractor"],
+    "feed_engine": ["feed", "timeline", "stream", "post", "social", "stories", "channel"],
+    "runner_engine": ["runner", "pipeline", "build", "ci/cd", "job", "worker", "execution", "action"],
+
+    # Metrics / Analytics
+    "sprint_analytics": ["sprint", "analytics", "burndown", "velocity", "metrics", "chart", "report", "stats", "graph", "mttr", "resolution time", "kpi", "calculation", "trend", "summary"],
+    "analytics": ["analytics", "conversion", "sales", "revenue", "telemetry", "metric", "report", "stats"],
+    "query_engine": ["query", "sql", "spark", "aggregation", "compute", "engine", "transform"],
+    "telemetry": ["telemetry", "lineage", "metric", "log", "audit", "trace", "observability"],
+
+    # Storage / Assets
+    "attachment_store": ["attachment", "file", "upload", "download", "pdf", "s3", "storage", "asset", "document", "image", "blob", "avatar", "file size", "export"],
+    "data_lake": ["data lake", "lakehouse", "feature store", "database", "vector", "s3", "bigquery", "postgres", "table", "storage"],
+    "media_cdn": ["media", "cdn", "image", "video", "asset", "blob", "storage", "photos"],
+    "artifact_registry": ["artifact", "docker", "registry", "image", "package", "helm", "repo"],
+
+    # Notifications & Alerts
+    "notification_service": ["notification", "alert", "email", "push", "message", "webhook", "subscriber", "event", "websocket", "socket", "drawer", "bell", "inbox", "notify"],
+    "notifications": ["notification", "email", "sms", "receipt", "alert", "message", "push"],
+    "push_service": ["push", "fcm", "apns", "notification", "inbox", "message"],
+    "alerting_monitor": ["alert", "monitor", "anomaly", "sla", "paging", "notification"],
+    "webhook_dispatcher": ["webhook", "event", "dispatcher", "pubsub", "queue", "listener"],
+
+    # AI / Copilot
+    "ai_copilot": ["ai", "copilot", "mentor", "llm", "classify", "predict", "chat", "suggestion", "bot", "assistant", "model", "prompt", "gemini", "intelligence", "semantic search", "duplicate", "blast radius", "summary", "recommendation"],
+    "ml_inference": ["ml", "ai", "model", "inference", "llm", "embedding", "train", "prediction"],
+
+    # Compliance / Audit / Infra
+    "audit_logger": ["audit", "log", "activity", "history", "telemetry", "trace", "event", "security", "trail", "timeline", "ledger"],
+    "order_fulfillment": ["fulfillment", "shipping", "tracking", "delivery", "courier", "package", "dispatch"],
+    "payment_gateway": ["payment", "stripe", "billing", "card", "invoice", "charge", "refund", "gateway", "currency", "checkout"],
+    "product_catalog": ["product", "catalog", "item", "search", "inventory", "stock", "warehouse", "sku"],
+    "cluster_agent": ["cluster", "kubernetes", "agent", "pod", "node", "daemon", "server"],
+    "observability": ["observability", "metrics", "prometheus", "grafana", "logs", "traces", "health"],
+    "moderation": ["moderation", "filter", "spam", "safety", "trust", "abuse"],
+}
+
+
+def _match_module_id_with_confidence(issue: Issue, module_templates: list[dict[str, Any]]) -> tuple[str, int, str]:
+    """
+    Classify an issue to a module ID from the active blueprint using multi-attribute weighted scoring.
+    Returns: (module_id, confidence_percentage, human_readable_allocation_reason)
+    """
+    tmpl_map = {t["id"]: t for t in module_templates}
 
     best_id = None
     best_score = 0
+    best_reasons = []
+
+    issue_mod = (issue.module or "").strip().lower()
+    issue_cat = (issue.category or "").strip().lower()
+    issue_type = (issue.defect_type or "").strip().lower()
+    issue_title = (issue.title or "").strip().lower()
+    issue_desc = (issue.description or "").strip().lower()
+    issue_steps = (issue.steps_to_reproduce or "").strip().lower()
+    issue_actual = (issue.actual_behavior or "").strip().lower()
+
+    title_words = set(re.findall(r"\b[a-zA-Z0-9_-]+\b", issue_title))
+    body_text = f"{issue_desc} {issue_steps} {issue_actual}"
+    body_words = set(re.findall(r"\b[a-zA-Z0-9_-]+\b", body_text))
 
     for tmpl in module_templates:
         score = 0
+        reasons = []
         tmpl_id = tmpl["id"]
         tmpl_name = tmpl["name"].lower()
+        tmpl_cat = tmpl["category"].lower()
+        keywords = tmpl.get("keywords", [])
+        aliases = MODULE_ALIAS_MAP.get(tmpl_id, [])
 
         # 1. Direct match on issue.module field (highest weight)
-        if issue.module:
-            mod_str = issue.module.strip().lower()
-            if tmpl_id == mod_str or tmpl_id in mod_str or tmpl_name in mod_str or mod_str in tmpl_name:
-                score += 30
+        if issue_mod:
+            if tmpl_id == issue_mod or issue_mod in tmpl_id or tmpl_name in issue_mod or issue_mod in tmpl_name:
+                score += 60
+                reasons.append(f"Module match '{issue.module}'")
+            else:
+                for alias in aliases:
+                    if alias in issue_mod or issue_mod in alias:
+                        score += 50
+                        reasons.append(f"Module alias '{issue.module}' -> '{alias}'")
+                        break
 
         # 2. Match on issue.category field
-        if issue.category:
-            cat_str = issue.category.strip().lower()
-            if tmpl["category"].lower() in cat_str or cat_str in tmpl["category"].lower() or tmpl_id in cat_str:
-                score += 15
+        if issue_cat:
+            if tmpl_cat in issue_cat or issue_cat in tmpl_cat or tmpl_id in issue_cat:
+                score += 35
+                reasons.append(f"Category '{issue.category}'")
+            else:
+                for alias in aliases:
+                    if alias == issue_cat or (len(alias) >= 4 and alias in issue_cat):
+                        score += 25
+                        reasons.append(f"Category '{issue.category}'")
+                        break
 
-        # 3. Match on template keywords (whole word or phrase)
-        for kw in tmpl.get("keywords", []):
+        # 3. Match on issue.defect_type field
+        if issue_type:
+            if "security" in issue_type and "auth" in tmpl_id:
+                score += 20
+                reasons.append("Security defect type")
+            elif ("ui" in issue_type or "ux" in issue_type) and ("dashboard" in tmpl_id or "storefront" in tmpl_id or "client" in tmpl_id or "portal" in tmpl_id):
+                score += 20
+                reasons.append("UI/UX defect type")
+            elif "performance" in issue_type and ("gateway" in tmpl_id or "engine" in tmpl_id):
+                score += 15
+                reasons.append("Performance defect type")
+
+        # 4. Keyword matches in Title (High weight)
+        matched_title_kws = []
+        for kw in (keywords + aliases[:6]):
             kw_clean = kw.lower()
             if " " in kw_clean:
-                if kw_clean in raw_text:
-                    score += 8
-            elif kw_clean in words:
+                if kw_clean in issue_title:
+                    score += 15
+                    matched_title_kws.append(kw_clean)
+            elif kw_clean in title_words:
+                score += 12
+                matched_title_kws.append(kw_clean)
+
+        if matched_title_kws:
+            reasons.append(f"Title keywords ({', '.join(matched_title_kws[:3])})")
+
+        # 5. Keyword matches in Description / Steps / Actual behavior
+        matched_body_kws = []
+        for kw in keywords:
+            kw_clean = kw.lower()
+            if " " in kw_clean:
+                if kw_clean in body_text:
+                    score += 6
+                    matched_body_kws.append(kw_clean)
+            elif kw_clean in body_words:
                 score += 5
+                matched_body_kws.append(kw_clean)
+
+        if matched_body_kws and not matched_title_kws:
+            reasons.append(f"Content keywords ({', '.join(matched_body_kws[:2])})")
 
         if score > best_score:
             best_score = score
             best_id = tmpl_id
+            best_reasons = reasons
 
-    if best_id and best_score >= 15:
-        return best_id, 96
-    elif best_id and best_score >= 5:
-        return best_id, 90
+    if best_id and best_score >= 50:
+        conf = 98
+    elif best_id and best_score >= 25:
+        conf = 92
+    elif best_id and best_score >= 10:
+        conf = 85
     elif best_id:
-        return best_id, 82
+        conf = 78
+    else:
+        # Fallback to second module (often core/task engine) or first
+        fallback_id = module_templates[1]["id"] if len(module_templates) > 1 else module_templates[0]["id"]
+        return fallback_id, 70, "Allocated to primary core workflow engine by default"
 
-    # Fallback to second module (often core/gateway) or first module
-    fallback_id = module_templates[1]["id"] if len(module_templates) > 1 else module_templates[0]["id"]
-    return fallback_id, 70
+    matched_tmpl = tmpl_map.get(best_id, {})
+    mod_display_name = matched_tmpl.get("name", best_id.replace("_", " ").title())
 
+    if best_reasons:
+        reason_text = f"Allocated to {mod_display_name} via {', '.join(best_reasons[:2])}."
+    else:
+        reason_text = f"Allocated to {mod_display_name} based on architectural workflow patterns."
+
+    return best_id, conf, reason_text
 
 
 def _match_module_id(issue: Issue, module_templates: list[dict[str, Any]]) -> str:
     """Convenience wrapper for matching module ID."""
-    m_id, _ = _match_module_id_with_confidence(issue, module_templates)
+    m_id, _, _ = _match_module_id_with_confidence(issue, module_templates)
     return m_id
 
 
@@ -582,7 +717,7 @@ def compute_all_defect_allocations(
     allocations: list[DefectAllocation] = []
 
     for issue in issues:
-        m_id, confidence = _match_module_id_with_confidence(issue, base_module_templates)
+        m_id, confidence, alloc_reason = _match_module_id_with_confidence(issue, base_module_templates)
         m_name = module_name_map.get(m_id, m_id.replace("_", " ").title())
 
         # 1st Degree Direct Dependents
@@ -649,6 +784,7 @@ def compute_all_defect_allocations(
             allocated_module_id=m_id,
             allocated_module_name=m_name,
             allocation_confidence=confidence,
+            allocation_reason=alloc_reason,
             direct_impact_count=len(direct_modules),
             cascade_risk_count=len(cascade_modules),
             direct_impact_module_names=direct_names,
